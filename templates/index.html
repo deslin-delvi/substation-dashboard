@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Video Feed -->
+    <div class="col-lg-8">
+        <div class="card shadow-sm h-100">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-camera-video"></i> Live Video Feed
+            </div>
+            <div class="card-body p-0 bg-dark">
+                <div class="video-container">
+                    <img src="https://via.placeholder.com/800x600/2c3e50/ecf0f1?text=Video+Feed+Coming+Soon" 
+                         alt="Video Feed" 
+                         class="img-fluid w-100" 
+                         id="video-feed">
+                    <div class="video-overlay">
+                        <span class="badge bg-danger pulse">DETECTION ACTIVE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column: Status & Controls -->
+    <div class="col-lg-4">
+        <!-- PPE Status Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-person-check"></i> PPE Status
+            </div>
+            <div class="card-body">
+                <div class="status-indicator mb-3" id="main-status">
+                    <div class="alert alert-success d-flex align-items-center" role="alert">
+                        <i class="bi bi-check-circle-fill me-2 fs-4"></i>
+                        <div>
+                            <strong>ALL CLEAR</strong><br>
+                            <small>PPE Compliance Verified</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PPE Items Checklist -->
+                <div class="ppe-checklist">
+                    <div class="ppe-item" id="helmet-status">
+                        <i class="bi bi-circle-fill text-success"></i>
+                        <span>Hard Hat</span>
+                        <i class="bi bi-check-lg text-success ms-auto"></i>
+                    </div>
+                    <div class="ppe-item" id="vest-status">
+                        <i class="bi bi-circle-fill text-success"></i>
+                        <span>Safety Vest</span>
+                        <i class="bi bi-check-lg text-success ms-auto"></i>
+                    </div>
+                    <div class="ppe-item" id="gloves-status">
+                        <i class="bi bi-circle-fill text-success"></i>
+                        <span>Safety Gloves</span>
+                        <i class="bi bi-check-lg text-success ms-auto"></i>
+                    </div>
+                </div>
+
+                <div class="text-muted text-center mt-3">
+                    <small>Last Updated: <span id="last-updated">--:--:--</span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relay Control Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-warning text-dark">
+                <i class="bi bi-door-open"></i> Gate Control
+            </div>
+            <div class="card-body text-center">
+                <div class="relay-status mb-3" id="relay-indicator">
+                    <span class="badge bg-secondary fs-6 px-4 py-2">GATE: OPEN</span>
+                </div>
+                <button class="btn btn-warning btn-lg w-100" id="relay-toggle">
+                    <i class="bi bi-toggle-on"></i> Toggle Gate
+                </button>
+            </div>
+        </div>
+
+        <!-- Activity Log Card -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-info text-white">
+                <i class="bi bi-clock-history"></i> Recent Activity
+            </div>
+            <div class="card-body p-0">
+                <div class="event-log" id="event-log">
+                    <!-- Events loaded via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
