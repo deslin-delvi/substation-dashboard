@@ -10,10 +10,10 @@
             </div>
             <div class="card-body p-0 bg-dark">
                 <div class="video-container">
-                    <img src="https://via.placeholder.com/800x600/2c3e50/ecf0f1?text=Video+Feed+Coming+Soon" 
-                         alt="Video Feed" 
-                         class="img-fluid w-100" 
-                         id="video-feed">
+                    <img src="{{ url_for('video_feed') }}"
+                        alt="Video Feed"
+                        class="img-fluid w-100"
+                        id="video-feed">
                     <div class="video-overlay">
                         <span class="badge bg-danger pulse">DETECTION ACTIVE</span>
                     </div>
