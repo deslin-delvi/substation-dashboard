@@ -62,12 +62,12 @@ class YOLOProcessor:
             if not ok:
                 time.sleep(0.05)
                 continue
-            """
+            
             # YOLO inference
             results = self.model(frame, verbose=False)[0]
             self._process_results(results)
             self._draw_boxes(frame, results)
-            """
+            
             # Encode exactly like bare_cam_test would
             ret, jpeg = cv2.imencode(".jpg", frame)
             if ret:
