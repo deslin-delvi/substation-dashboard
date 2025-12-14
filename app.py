@@ -2,7 +2,7 @@ from flask import Flask, render_template, jsonify, Response
 from datetime import datetime
 import time
 
-from utils.yolo_detector import YOLOProcessor  # NEW import
+from utils.yolo_detector import YOLOProcessor
 
 
 app = Flask(__name__)
@@ -11,12 +11,8 @@ app = Flask(__name__)
 yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0)
 yolo.start()
 
-# You can later append real events from detections
-mock_events = [
-    {'time': '10:30:15', 'type': 'success', 'message': 'System started'},
-    {'time': '10:25:42', 'type': 'warning', 'message': 'Waiting for camera frames'},
-]
-
+relay_state = "CLOSED"   # gate starts closed
+override = False         # manual override flag
 
 @app.route('/')
 def index():
@@ -25,24 +21,57 @@ def index():
 
 @app.route('/status')
 def status():
-    # Read latest YOLO status instead of fixed mock
+    """
+    Automatic logic when override is OFF:
+      - ppe_status == "OK"     -> relay_state = "OPEN"
+      - ppe_status == "NOT_OK" -> relay_state = "CLOSED"
+    When override is ON:
+      - relay_state is left as last set by supervisor.
+    """
+    global relay_state, override
     current = yolo.latest_status.copy()
-    current['relay'] = 'OPEN'          # relay logic will come in Pi phase
+
+    if not override:
+        if current.get("ppe_status") == "OK":
+            relay_state = "OPEN"
+        else:
+            relay_state = "CLOSED"
+
+    current["relay"] = relay_state
+    current["override"] = override
     current['last_updated'] = datetime.now().strftime('%H:%M:%S')
     return jsonify(current)
 
 
 @app.route('/events')
 def events():
-    return jsonify(mock_events)
+    # Last 10 events from YOLO
+    return jsonify(yolo.events[-10:])
 
 
 @app.route('/control/relay', methods=['POST'])
 def control_relay():
-    # Still mock for now; real GPIO on Pi later
-    # You can add relay state into a global or yolo.latest_status if needed
-    return jsonify({'relay': 'TOGGLE_PENDING'})
+    """
+    Manual override:
+      - Sets override = True.
+      - Toggles gate OPEN/CLOSED regardless of PPE.
+      - Supervisor can both open and close the gate.
+    """
+    global relay_state, override
+    override = True
 
+    if relay_state == "OPEN":
+        relay_state = "CLOSED"
+        msg = "Manual override: gate CLOSED by supervisor"
+    else:
+        relay_state = "OPEN"
+        msg = "Manual override: gate OPENED by supervisor"
+
+    return jsonify({
+        "relay": relay_state,
+        "override": override,
+        "message": msg,
+    })
 
 @app.route("/video_feed")
 def video_feed():

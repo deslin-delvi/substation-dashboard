@@ -3,12 +3,16 @@ from ultralytics import YOLO
 import cv2
 import threading
 import time
-
+from datetime import datetime
 
 class YOLOProcessor:
     def __init__(self, model_path="models/best.pt", camera_index=0):
         # Load model
         self.model = YOLO(model_path)
+
+        # Events + status tracking
+        self.events = []
+        self.prev_status = "UNKNOWN"
 
         # Open camera EXACTLY like bare_cam_test
         self.cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
@@ -35,8 +39,29 @@ class YOLOProcessor:
         gloves = "gloves" in classes or "glove" in classes
 
         ok = helmet and vest and gloves
+        new_status = "OK" if ok else "NOT_OK"
+
+        # Log status change
+        if new_status != self.prev_status:
+            ts = datetime.now().strftime("%H:%M:%S")
+            if new_status == "NOT_OK":
+                missing = []
+                if not helmet:
+                    missing.append("helmet")
+                if not vest:
+                    missing.append("vest")
+                if not gloves:
+                    missing.append("gloves")
+                msg = f"PPE missing: {', '.join(missing)}"
+                self.events.append({"time": ts, "type": "danger", "message": msg})
+            else:
+                self.events.append(
+                    {"time": ts, "type": "success", "message": "All PPE detected"}
+                )
+            self.prev_status = new_status
+            
         self.latest_status.update({
-            "ppe_status": "OK" if ok else "NOT_OK",
+            "ppe_status": new_status,
             "helmet": helmet,
             "vest": vest,
             "gloves": gloves
