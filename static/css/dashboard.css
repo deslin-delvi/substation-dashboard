@@ -68,9 +68,51 @@ body {
 
 /* Relay Status */
 .relay-status {
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 8px;
+  padding: 10px;          /* was 15px */
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+/* Keep relay section compact, don't stretch */
+.relay-status p {
+  margin-bottom: 6px;
+}
+
+#override-message {
+  min-height: 1.2rem;     /* small reserved space for one line */
+}
+
+.relay-open {
+  background-color: var(--success-color);
+  color: #fff;
+}
+
+.relay-closed {
+  background-color: var(--danger-color);
+  color: #fff;
+}
+
+.override-on {
+  background-color: var(--warning-color);
+  color: #000;
+}
+
+.override-off {
+  background-color: #6c757d;
+  color: #fff;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.status-subtext {
+  font-size: 0.8rem;
+  color: #6c757d;
 }
 
 /* Event Log */

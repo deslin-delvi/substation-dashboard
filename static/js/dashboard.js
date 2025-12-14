@@ -3,96 +3,162 @@ let statusInterval;
 let eventsInterval;
 
 function updateStatus() {
-    fetch('/status')
-        .then(response => response.json())
-        .then(data => {
-            // Update main status
-            const mainStatus = document.getElementById('main-status');
-            if (data.ppe_status === 'OK') {
-                mainStatus.innerHTML = `
-                    <div class="alert alert-success d-flex align-items-center" role="alert">
-                        <i class="bi bi-check-circle-fill me-2 fs-4"></i>
-                        <div>
-                            <strong>ALL CLEAR</strong><br>
-                            <small>PPE Compliance Verified</small>
-                        </div>
-                    </div>
-                `;
-            } else {
-                mainStatus.innerHTML = `
-                    <div class="alert alert-danger d-flex align-items-center" role="alert">
-                        <i class="bi bi-exclamation-triangle-fill me-2 fs-4"></i>
-                        <div>
-                            <strong>PPE VIOLATION</strong><br>
-                            <small>Missing Required Equipment</small>
-                        </div>
-                    </div>
-                `;
-            }
+  fetch('/status')
+    .then(response => response.json())
+    .then(data => {
+      // Update main status
+      const mainStatus = document.getElementById('main-status');
+      if (data.ppe_status === 'OK') {
+        mainStatus.innerHTML = `
+          <span class="status-pill status-ok">SAFE</span>
+          <span class="status-subtext">All PPE detected</span>
+        `;
+      } else if (data.ppe_status === 'NOT_OK') {
+        mainStatus.innerHTML = `
+          <span class="status-pill status-bad">UNSAFE</span>
+          <span class="status-subtext">Missing PPE detected</span>
+        `;
+      } else {
+        mainStatus.innerHTML = `
+          <span class="status-pill status-unknown">UNKNOWN</span>
+          <span class="status-subtext">Waiting for detection</span>
+        `;
+      }
 
-            // Update individual items
-            updatePPEItem('helmet-status', data.helmet);
-            updatePPEItem('vest-status', data.vest);
-            updatePPEItem('gloves-status', data.gloves);
+      // Update individual PPE indicators
+      const helmetEl = document.getElementById('helmet-status');
+      const vestEl = document.getElementById('vest-status');
+      const glovesEl = document.getElementById('gloves-status');
 
-            // Update relay
-            const relayIndicator = document.getElementById('relay-indicator');
-            const relayClass = data.relay === 'OPEN' ? 'bg-secondary' : 'bg-danger';
-            relayIndicator.innerHTML = `<span class="badge ${relayClass} fs-6 px-4 py-2">GATE: ${data.relay}</span>`;
+      if (data.helmet) {
+        helmetEl.classList.add('ok');
+        helmetEl.classList.remove('bad');
+      } else {
+        helmetEl.classList.add('bad');
+        helmetEl.classList.remove('ok');
+      }
 
-            // Update timestamp
-            document.getElementById('last-updated').textContent = data.last_updated;
-        })
-        .catch(error => console.error('Error fetching status:', error));
-}
+      if (data.vest) {
+        vestEl.classList.add('ok');
+        vestEl.classList.remove('bad');
+      } else {
+        vestEl.classList.add('bad');
+        vestEl.classList.remove('ok');
+      }
 
-function updatePPEItem(elementId, isPresent) {
-    const element = document.getElementById(elementId);
-    const statusClass = isPresent ? 'text-success' : 'text-danger';
-    const icon = isPresent ? 'bi-check-lg' : 'bi-x-lg';
-    
-    const circleIcon = element.querySelector('.bi-circle-fill');
-    const checkIcon = element.querySelector('.ms-auto');
-    
-    circleIcon.className = `bi bi-circle-fill ${statusClass}`;
-    checkIcon.className = `bi ${icon} ${statusClass} ms-auto`;
-}
+      if (data.gloves) {
+        glovesEl.classList.add('ok');
+        glovesEl.classList.remove('bad');
+      } else {
+        glovesEl.classList.add('bad');
+        glovesEl.classList.remove('ok');
+      }
 
-function loadEvents() {
-    fetch('/events')
-        .then(response => response.json())
-        .then(events => {
-            const eventLog = document.getElementById('event-log');
-            eventLog.innerHTML = events.map(event => {
-                const iconClass = event.type === 'success' ? 'text-success bi-check-circle-fill' : 'text-warning bi-exclamation-circle-fill';
-                return `
-                    <div class="event-item">
-                        <i class="bi ${iconClass}"></i>
-                        <span class="event-time">${event.time}</span>
-                        <span class="event-message">${event.message}</span>
-                    </div>
-                `;
-            }).join('');
-        })
-        .catch(error => console.error('Error loading events:', error));
-}
+      // Update relay badge
+      const relayBadge = document.getElementById('relay-status');
+      relayBadge.textContent = data.relay || 'UNKNOWN';
+      relayBadge.classList.toggle('relay-open', data.relay === 'OPEN');
+      relayBadge.classList.toggle('relay-closed', data.relay === 'CLOSED');
 
-// Relay toggle
-document.addEventListener('DOMContentLoaded', function() {
-    document.getElementById('relay-toggle').addEventListener('click', function() {
-        fetch('/control/relay', { method: 'POST' })
-            .then(response => response.json())
-            .then(data => {
-                updateStatus();
-            })
-            .catch(error => console.error('Error toggling relay:', error));
+      // Show override indicator + message area
+      const overrideBadge = document.getElementById('override-badge');
+      const overrideMsg = document.getElementById('override-message');
+
+      if (data.override) {
+        overrideBadge.textContent = 'OVERRIDE ACTIVE';
+        overrideBadge.classList.add('override-on');
+        overrideBadge.classList.remove('override-off');
+        // Keep existing text; actual message comes from /control/relay
+        if (!overrideMsg.textContent) {
+          overrideMsg.textContent = 'Manual override in effect';
+        }
+      } else {
+        overrideBadge.textContent = 'AUTO MODE';
+        overrideBadge.classList.remove('override-on');
+        overrideBadge.classList.add('override-off');
+        // Do not clear overrideMsg, so the last action is still visible
+      }
+
+      // Last updated
+      const lastUpdatedEl = document.getElementById('last-updated');
+      if (lastUpdatedEl && data.last_updated) {
+        lastUpdatedEl.textContent = data.last_updated;
+      }
+    })
+    .catch(err => {
+      console.error('Error updating status:', err);
     });
+}
 
-    // Initial load
-    updateStatus();
-    loadEvents();
+function updateEvents() {
+  fetch('/events')
+    .then(response => response.json())
+    .then(events => {
+      const list = document.getElementById('event-list');
+      if (!list) return;
 
-    // Start auto-refresh
-    statusInterval = setInterval(updateStatus, 3000);
-    eventsInterval = setInterval(loadEvents, 5000);
+      list.innerHTML = '';
+
+      events.slice().reverse().forEach(evt => {
+        const li = document.createElement('li');
+        li.className = `event-item event-${evt.type}`;
+        li.innerHTML = `
+          <span class="event-time">${evt.time}</span>
+          <span class="event-message">${evt.message}</span>
+        `;
+        list.appendChild(li);
+      });
+    })
+    .catch(err => {
+      console.error('Error updating events:', err);
+    });
+}
+
+function initRelayControls() {
+  const relayBtn = document.getElementById('relay-toggle-btn');
+  if (!relayBtn) return;
+
+  relayBtn.addEventListener('click', () => {
+    fetch('/control/relay', {
+      method: 'POST',
+    })
+      .then(res => res.json())
+      .then(data => {
+        // Update relay badge
+        const relayBadge = document.getElementById('relay-status');
+        relayBadge.textContent = data.relay;
+        relayBadge.classList.toggle('relay-open', data.relay === 'OPEN');
+        relayBadge.classList.toggle('relay-closed', data.relay === 'CLOSED');
+
+        // Show override state
+        const overrideBadge = document.getElementById('override-badge');
+        const overrideMsg = document.getElementById('override-message');
+
+        if (data.override) {
+          overrideBadge.textContent = 'OVERRIDE ACTIVE';
+          overrideBadge.classList.add('override-on');
+          overrideBadge.classList.remove('override-off');
+        }
+
+        // Show the server message, e.g.
+        // "Manual override: gate OPENED by supervisor"
+        // "Manual override: gate CLOSED by supervisor"
+        if (overrideMsg && data.message) {
+          overrideMsg.textContent = data.message;
+        }
+      })
+      .catch(err => {
+        console.error('Error toggling relay:', err);
+      });
+  });
+}
+
+// Initialize on load
+window.addEventListener('DOMContentLoaded', () => {
+  updateStatus();
+  updateEvents();
+  initRelayControls();
+
+  statusInterval = setInterval(updateStatus, 3000);
+  eventsInterval = setInterval(updateEvents, 5000);
 });
