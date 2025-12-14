@@ -73,6 +73,15 @@ def control_relay():
         "message": msg,
     })
 
+@app.route("/control/auto", methods=["POST"])
+def clear_override():
+    global override
+    override = False
+    return jsonify({
+        "override": False,
+        "message": "Automatic PPE control restored",
+    })
+
 @app.route("/video_feed")
 def video_feed():
     def generate():

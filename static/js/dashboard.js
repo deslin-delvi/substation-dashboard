@@ -151,6 +151,22 @@ function initRelayControls() {
         console.error('Error toggling relay:', err);
       });
   });
+
+  const autoBtn = document.getElementById('auto-mode-btn');
+  if (autoBtn) {
+    autoBtn.addEventListener('click', () => {
+      fetch('/control/auto', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          const overrideBadge = document.getElementById('override-badge');
+          const overrideMsg = document.getElementById('override-message');
+          overrideBadge.textContent = 'AUTO MODE';
+          overrideBadge.classList.remove('override-on');
+          overrideBadge.classList.add('override-off');
+          if (data.message) overrideMsg.textContent = data.message;
+        });
+    });
+  }
 }
 
 // Initialize on load
