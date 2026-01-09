@@ -11,3 +11,8 @@ models/*.pt
 # OS
 .DS_Store
 Thumbs.db
+
+# Database
+instance/
+*.db
+__pycache__/

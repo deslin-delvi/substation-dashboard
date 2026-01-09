@@ -5,6 +5,14 @@ import threading
 import time
 from datetime import datetime
 
+try:
+    from flask_sqlalchemy import SQLAlchemy
+    from models import db, Violation
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+    print("⚠️ Database not available - running in mock mode")
+
 class YOLOProcessor:
     def __init__(self, model_path="models/best.pt", camera_index=0):
         # Load model
@@ -66,6 +74,39 @@ class YOLOProcessor:
             "vest": vest,
             "gloves": gloves
         })
+
+    def log_violation(self, frame, detection_results):
+        """Capture violation image and log to database"""
+        if not DATABASE_AVAILABLE or detection_results['ppe_status'] != "NOT_OK":
+            return
+            
+        try:
+            import os
+            os.makedirs('static/violations', exist_ok=True)
+            
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"static/violations/violation_{timestamp}.jpg"
+            
+            # Save annotated frame
+            cv2.imwrite(filename, frame)
+            
+            # Log to database
+            missing_items = [k for k, v in detection_results.items() 
+                           if k != 'ppe_status' and not v]
+            
+            violation = Violation(
+                violation_type='ppe_incomplete',
+                missing_items=', '.join(missing_items),
+                image_path=filename,
+                gate_action='DENIED'
+            )
+            db.session.add(violation)
+            db.session.commit()
+            
+            print(f"📸 Violation logged: {filename}")
+            
+        except Exception as e:
+            print(f"❌ Violation logging failed: {e}")
 
     def _draw_boxes(self, frame, results):
         for b in results.boxes:

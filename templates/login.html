@@ -1,0 +1,85 @@
+<!-- templates/login.html -->
+{% extends "base.html" %}
+
+{% block title %}Supervisor Login - Substation PPE Safety{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center min-vh-100 py-5">
+    <div class="col-md-5 col-lg-4">
+        <div class="card shadow-lg border-0">
+            <div class="card-body p-5 p-md-6">
+                <!-- Header -->
+                <div class="text-center mb-5">
+                    <div class="mx-auto mb-4" style="width: 80px; height: 80px; background: linear-gradient(135deg, #dc3545, #6f42c1); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-shield-lock text-white" style="font-size: 2rem;"></i>
+                    </div>
+                    <h2 class="h3 mb-1 fw-bold">Supervisor Login</h2>
+                    <p class="text-muted mb-0">Access Substation Safety Dashboard</p>
+                </div>
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category=='danger' else category }} alert-dismissible fade show mb-4" role="alert">
+                                <i class="bi bi-exclamation-triangle me-2"></i>{{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Login Form -->
+                <form method="POST" novalidate>
+                    <div class="mb-4">
+                        <label for="username" class="form-label fw-medium">
+                            <i class="bi bi-person me-2"></i>Username
+                        </label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">
+                                <i class="bi bi-person-fill text-muted"></i>
+                            </span>
+                            <input type="text" 
+                                   class="form-control form-control-lg" 
+                                   id="username" 
+                                   name="username" 
+                                   placeholder="Enter username"
+                                   required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="password" class="form-label fw-medium">
+                            <i class="bi bi-lock me-2"></i>Password
+                        </label>
+                        <div class="input-group input-group-lg">
+                            <span class="input-group-text">
+                                <i class="bi bi-lock-fill text-muted"></i>
+                            </span>
+                            <input type="password" 
+                                   class="form-control form-control-lg" 
+                                   id="password" 
+                                   name="password" 
+                                   placeholder="Enter password"
+                                   required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-lg btn-dark w-100 fw-medium shadow-sm">
+                        <i class="bi bi-box-arrow-in-right me-2"></i>
+                        Sign In
+                    </button>
+                </form>
+
+                <!-- Default Credentials -->
+                <div class="text-center mt-4 pt-3 border-top">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Default: <strong>admin</strong> / <strong>admin123</strong>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
