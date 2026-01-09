@@ -113,13 +113,29 @@ class YOLOProcessor:
             x1, y1, x2, y2 = map(int, b.xyxy[0])
             cls_id = int(b.cls)
             conf = float(b.conf)
-            label = f"{self.model.names[cls_id]} {conf:.2f}"
-            color = (0, 255, 0)
+            
+            class_name = self.model.names[cls_id]
+            label = f"{class_name} {conf:.2f}"
+            
+            # GREEN for POSITIVE PPE classes, RED for NEGATIVE "no_" classes
+            if class_name in ["helmet", "vest", "safety vest", "gloves", "glove"]:
+                color = (0, 255, 0)    # GREEN ✅ PPE DETECTED
+                text_color = (0, 255, 0)
+            elif class_name.startswith("no-"): # RED ❌ PPE MISSING
+                color = (0, 0, 255)    
+                text_color = (0, 0, 255)
+            else:
+                color = (0, 255, 255) # YELLOW for other objects
+                text_color = (0, 255, 255)  
+            
+            # Draw bounding box
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
+            
             cv2.putText(
                 frame, label, (x1, y1 - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, text_color, 2
             )
+
 
     def loop(self):
         self.running = True

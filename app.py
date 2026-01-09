@@ -193,7 +193,6 @@ def video_feed():
 if __name__ == "__main__":
     with app.app_context():
         db.create_all()  # ← Creates substation.db + tables automatically
-    print("Tables available:", User.__tablename__, Violation.__tablename__)
     # IMPORTANT: disable reloader so the camera is not opened twice
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
 
