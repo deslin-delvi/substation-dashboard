@@ -16,3 +16,7 @@ Thumbs.db
 instance/
 *.db
 __pycache__/
+
+#violation images
+static/violations/*
+!static/violations/.gitkeep
