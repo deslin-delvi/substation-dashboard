@@ -4,12 +4,15 @@
 
 {% block content %}
 <div class="row justify-content-between align-items-center mb-4">
-    <h2 class="mb-0">
-        <i class="bi bi-exclamation-triangle text-danger me-2"></i>
-        Safety Violations ({{ violations.total }})
-    </h2>
+    <div class="col">
+        <h2 class="mb-0">
+            <i class="bi bi-exclamation-triangle text-danger me-2"></i>
+            Safety Violations ({{ violations.total }})
+        </h2>
+    </div>
     <div class="col-auto">
-        <span class="badge bg-danger">{{ violations.per_page }} per page</span>
+        <span class="badge bg-info me-2">{{ violations.per_page }} per page</span>
+        <span class="badge bg-secondary">Page {{ violations.page }}/{{ violations.pages }}</span>
     </div>
 </div>
 
@@ -18,32 +21,46 @@
     {% for violation in violations.items %}
     <div class="col-xl-3 col-lg-4 col-md-6">
         <div class="card h-100 shadow-sm border-0 hover-shadow">
+            <!-- Violation Type Badge -->
+            <div class="position-absolute top-0 start-0 m-2" style="z-index: 10;">
+                {% if violation.violation_type == 'manual_override' %}
+                <span class="badge bg-warning text-dark">
+                    <i class="bi bi-hand-index"></i> MANUAL OVERRIDE
+                </span>
+                {% elif violation.violation_type == 'auto_mode_restored' %}
+                <span class="badge bg-info">
+                    <i class="bi bi-arrow-clockwise"></i> AUTO RESTORED
+                </span>
+                {% elif violation.violation_type == 'ppe_incomplete' %}
+                <span class="badge bg-danger">
+                    <i class="bi bi-shield-x"></i> PPE VIOLATION
+                </span>
+                {% endif %}
+            </div>
+            
             {% if violation.image_path %}
-            <div class="position-relative">
-                <img src="{{ url_for('serve_violation_image', image_path=violation.image_path.split('/', 2)[2]) }}" 
+            <!-- Use image_path directly (it's now just the filename) -->
+            <img src="{{ url_for('serve_violation_image', filename=violation.image_path) }}" 
                      class="card-img-top" style="height: 200px; object-fit: cover;"
                      alt="Violation at {{ violation.timestamp.strftime('%H:%M:%S') }}">
                 <div class="position-absolute top-0 end-0 m-2">
                     <span class="badge bg-danger">PPE FAIL</span>
                 </div>
-            </div>
+
             {% else %}
-            <div class="bg-secondary text-white d-flex align-items-center justify-content-center text-center p-4" 
-                 style="height: 200px;">
-                <i class="bi bi-camera-video-off display-4 opacity-50 mb-2 d-block"></i>
-                <div>
-                    <div class="h6 mb-0">No Image</div>
-                    <small>{{ violation.timestamp.strftime('%H:%M:%S') }}</small>
-                </div>
+            <div class="bg-secondary text-white d-flex align-items-center justify-content-center" style="height: 200px;">
+                <i class="bi bi-camera-video-off display-4 opacity-50"></i>
             </div>
             {% endif %}
             
             <div class="card-body d-flex flex-column p-3">
-                <h6 class="card-title mb-2 text-truncate">
-                    <i class="bi bi-clock me-1"></i>{{ violation.timestamp.strftime('%H:%M:%S') }}
+                <h6 class="card-title mb-2">
+                    <i class="bi bi-clock me-1"></i>
+                    <strong>{{ violation.timestamp.strftime('%Y-%m-%d') }}</strong>
+                    {{ violation.timestamp.strftime('%H:%M:%S') }}
                 </h6>
                 
-                {% if violation.missing_items %}
+                {% if violation.missing_items and violation.missing_items != 'N/A' %}
                 <div class="mb-2">
                     <i class="bi bi-x-circle text-danger me-1"></i>
                     <span class="text-danger fw-medium">{{ violation.missing_items }}</span>
@@ -51,23 +68,48 @@
                 {% endif %}
                 
                 <div class="mb-3">
-                    <span class="badge bg-{{ 'danger' if violation.gate_action == 'DENIED' else 'warning' }} fs-6">
+                    {% if violation.gate_action == 'DENIED' %}
+                    <span class="badge bg-danger fs-6">
                         <i class="bi bi-lock"></i> {{ violation.gate_action }}
                     </span>
+                    {% elif violation.gate_action == 'MANUAL_OPEN' %}
+                    <span class="badge bg-success fs-6">
+                        <i class="bi bi-unlock"></i> GATE OPENED
+                    </span>
+                    {% elif violation.gate_action == 'MANUAL_CLOSE' %}
+                    <span class="badge bg-warning text-dark fs-6">
+                        <i class="bi bi-lock"></i> GATE CLOSED
+                    </span>
+                    {% elif violation.gate_action == 'AUTO_MODE' %}
+                    <span class="badge bg-info fs-6">
+                        <i class="bi bi-gear"></i> AUTO MODE
+                    </span>
+                    {% else %}
+                    <span class="badge bg-secondary fs-6">
+                        {{ violation.gate_action }}
+                    </span>
+                    {% endif %}
                 </div>
                 
                 {% if violation.operator_id %}
                 <small class="text-muted mb-2">
-                    <i class="bi bi-person-check"></i> {{ violation.operator_id }}
+                    <i class="bi bi-person-check"></i> Operator ID: {{ violation.operator_id }}
                 </small>
                 {% endif %}
                 
-                <!-- Supervisor Notes -->
+                <!-- Pre-filled Notes (read-only if auto-generated) -->
+                {% if violation.notes and (violation.violation_type == 'manual_override' or violation.violation_type == 'auto_mode_restored') %}
+                <div class="alert alert-light py-2 px-2 mb-2" style="font-size: 0.85rem;">
+                    <i class="bi bi-info-circle"></i> {{ violation.notes }}
+                </div>
+                {% endif %}
+                
+                <!-- Supervisor Notes (editable) -->
                 <textarea class="form-control form-control-sm mt-auto" 
-                          rows="2" placeholder="Supervisor notes..."
+                          rows="2" placeholder="Add supervisor notes..."
                           data-violation-id="{{ violation.id }}"
                           onchange="saveNotes({{ violation.id }}, this.value)"
-                          style="resize: vertical;">{{ violation.notes or '' }}</textarea>
+                          style="resize: vertical;">{% if violation.violation_type == 'ppe_incomplete' %}{{ violation.notes or '' }}{% endif %}</textarea>
             </div>
         </div>
     </div>
@@ -106,6 +148,16 @@
     </ul>
 </nav>
 {% endif %}
+
+<style>
+.hover-shadow {
+    transition: all 0.3s ease;
+}
+.hover-shadow:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
+}
+</style>
 {% endblock %}
 
 {% block scripts %}
@@ -119,9 +171,15 @@ async function saveNotes(violationId, notes) {
         });
         if (response.ok) {
             console.log('✅ Notes saved');
+            // Optional: Show a brief success indicator
+            const textarea = document.querySelector(`textarea[data-violation-id="${violationId}"]`);
+            const originalBg = textarea.style.backgroundColor;
+            textarea.style.backgroundColor = '#d4edda';
+            setTimeout(() => textarea.style.backgroundColor = originalBg, 1000);
         }
     } catch (e) {
         console.error('❌ Save failed:', e);
+        alert('Failed to save notes. Please try again.');
     }
 }
 </script>

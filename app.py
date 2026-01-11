@@ -6,10 +6,11 @@ from datetime import datetime
 import time
 import os
 import cv2
+import numpy as np
 
 # Local imports
 from utils.yolo_detector import YOLOProcessor
-from models import db, User, Violation  # You'll need to create models.py
+from models import db, User, Violation
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-super-secret-key-change-this-in-production'
@@ -98,23 +99,65 @@ def events():
 @app.route('/control/relay', methods=['POST'])
 @login_required
 def control_relay():
-    """Manual override - logs supervisor action to database"""
+    """Manual override - logs supervisor action + CAPTURES CURRENT FRAME"""
     global relay_state, override
     override = True
 
+    # 🔧 NEW: Capture current frame from camera
+    current_frame = yolo.latest_frame
+    image_filename = None
+    
+    if current_frame and isinstance(current_frame, bytes):
+        try:
+            # Decode JPEG bytes to OpenCV frame
+            nparr = np.frombuffer(current_frame, np.uint8)
+            frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame_np is not None and frame_np.size > 0:
+                # Save the image
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_filename = f"override_{timestamp}.jpg"
+                violations_dir = os.path.join(app.root_path, "static", "violations")
+                os.makedirs(violations_dir, exist_ok=True)
+                full_path = os.path.join(violations_dir, image_filename)
+                
+                success = cv2.imwrite(full_path, frame_np)
+                if success:
+                    print(f"✅ Manual override photo saved: {image_filename}")
+                else:
+                    print(f"❌ Failed to save override photo")
+                    image_filename = None
+            else:
+                print("❌ Frame decode failed")
+        except Exception as e:
+            print(f"❌ Error capturing override photo: {e}")
+            image_filename = None
+
+    # Toggle relay state
     if relay_state == "OPEN":
         relay_state = "CLOSED"
         msg = "Manual override: gate CLOSED by supervisor"
+        gate_action = "MANUAL_CLOSE"
     else:
         relay_state = "OPEN"
         msg = "Manual override: gate OPENED by supervisor"
+        gate_action = "MANUAL_OPEN"
 
-    # Log manual override to database
+    # 🔧 NEW: Get current PPE status for context
+    ppe_status = yolo.latest_status.copy()
+    missing_items = []
+    if not ppe_status.get('helmet'): missing_items.append('helmet')
+    if not ppe_status.get('vest'): missing_items.append('vest')
+    if not ppe_status.get('gloves'): missing_items.append('gloves')
+
+    # Log manual override to database WITH photo
     violation = Violation(
         violation_type='manual_override',
-        gate_action='MANUAL_OVERRIDE',
+        missing_items=', '.join(missing_items) if missing_items else 'N/A',
+        image_path=image_filename,  # 🔧 NEW: Store captured photo
+        gate_action=gate_action,
         operator_id=current_user.id,
-        notes=f'{msg} by {current_user.username}'
+        notes=f'{msg} by {current_user.username}. PPE Status: {"COMPLETE" if not missing_items else "INCOMPLETE"}'
     )
     db.session.add(violation)
     db.session.commit()
@@ -123,6 +166,7 @@ def control_relay():
         "relay": relay_state,
         "override": override,
         "message": msg,
+        "image_captured": image_filename is not None
     })
 
 @app.route("/control/auto", methods=["POST"])
@@ -131,9 +175,31 @@ def clear_override():
     global override
     override = False
     
+    # 🔧 OPTIONAL: Also capture photo when returning to auto mode
+    current_frame = yolo.latest_frame
+    image_filename = None
+    
+    if current_frame and isinstance(current_frame, bytes):
+        try:
+            nparr = np.frombuffer(current_frame, np.uint8)
+            frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            
+            if frame_np is not None and frame_np.size > 0:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                image_filename = f"auto_restore_{timestamp}.jpg"
+                violations_dir = os.path.join(app.root_path, "static", "violations")
+                os.makedirs(violations_dir, exist_ok=True)
+                full_path = os.path.join(violations_dir, image_filename)
+                
+                cv2.imwrite(full_path, frame_np)
+                print(f"✅ Auto mode restore photo saved: {image_filename}")
+        except Exception as e:
+            print(f"❌ Error capturing auto restore photo: {e}")
+    
     # Log restoration of auto mode
     violation = Violation(
         violation_type='auto_mode_restored',
+        image_path=image_filename,
         gate_action='AUTO_MODE',
         operator_id=current_user.id,
         notes=f'Automatic PPE control restored by {current_user.username}'
@@ -164,16 +230,11 @@ def add_violation_notes(id):
     db.session.commit()
     return jsonify({'status': 'success'})
 
-@app.route('/violations/<path:image_path>')
+@app.route('/violation-image/<path:filename>')
 @login_required
-def serve_violation_image(image_path):
-    """Securely serve violation images"""
-    if not image_path.startswith('violations/'):
-        return "Unauthorized", 403
-    try:
-        return send_from_directory('static', image_path)
-    except FileNotFoundError:
-        return "Image not found", 404
+def serve_violation_image(filename):
+    """Serve violation photos from static/violations"""
+    return send_from_directory('static/violations', filename)
 
 @app.route("/video_feed")
 def video_feed():
@@ -195,4 +256,3 @@ if __name__ == "__main__":
         db.create_all()  # ← Creates substation.db + tables automatically
     # IMPORTANT: disable reloader so the camera is not opened twice
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
-
