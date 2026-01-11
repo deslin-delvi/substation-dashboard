@@ -236,10 +236,22 @@ def violations():
 @app.route('/violations/<int:id>/notes', methods=['POST'])
 @login_required
 def add_violation_notes(id):
+    """🔧 FIX: Save to supervisor_notes field, not notes"""
     violation = Violation.query.get_or_404(id)
-    violation.notes = request.json.get('notes')
+    supervisor_notes = request.json.get('notes')
+    
+    print(f"📝 Saving supervisor notes for violation {id}: '{supervisor_notes}'")
+    
+    violation.supervisor_notes = supervisor_notes
     db.session.commit()
-    return jsonify({'status': 'success'})
+    
+    print(f"✅ Supervisor notes saved successfully")
+    
+    return jsonify({
+        'status': 'success',
+        'violation_id': id,
+        'notes': supervisor_notes
+    })
 
 @app.route('/violation-image/<path:filename>')
 @login_required

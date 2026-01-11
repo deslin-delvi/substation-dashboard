@@ -97,19 +97,38 @@
                 </small>
                 {% endif %}
                 
-                <!-- Pre-filled Notes (read-only if auto-generated) -->
+                <!-- 🔧 FIX: Show auto-generated notes as read-only text, not in textarea -->
                 {% if violation.notes and (violation.violation_type == 'manual_override' or violation.violation_type == 'auto_mode_restored') %}
                 <div class="alert alert-light py-2 px-2 mb-2" style="font-size: 0.85rem;">
                     <i class="bi bi-info-circle"></i> {{ violation.notes }}
                 </div>
                 {% endif %}
                 
-                <!-- Supervisor Notes (editable) -->
-                <textarea class="form-control form-control-sm mt-auto" 
-                          rows="2" placeholder="Add supervisor notes..."
-                          data-violation-id="{{ violation.id }}"
-                          onchange="saveNotes({{ violation.id }}, this.value)"
-                          style="resize: vertical;">{% if violation.violation_type == 'ppe_incomplete' %}{{ violation.notes or '' }}{% endif %}</textarea>
+                
+                <!-- Supervisor Notes with Save Button -->
+                <div class="mt-auto">
+                    <label class="form-label small text-muted mb-1">
+                        <i class="bi bi-pencil-square"></i> Supervisor Notes:
+                    </label>
+                    <textarea class="form-control form-control-sm mb-2" 
+                              id="notes-{{ violation.id }}"
+                              rows="2" 
+                              placeholder="Add your notes here..."
+                              style="resize: vertical;">{{ violation.supervisor_notes or '' }}</textarea>
+                    
+                    <!-- Save Button -->
+                    <button class="btn btn-sm btn-primary w-100" 
+                            onclick="saveNote({{ violation.id }})"
+                            id="save-btn-{{ violation.id }}">
+                        <i class="bi bi-save"></i> Save Note
+                    </button>
+                    
+                    <!-- Status Message -->
+                    <div id="status-{{ violation.id }}" 
+                         class="small mt-1 text-center" 
+                         style="min-height: 20px; opacity: 0; transition: opacity 0.3s;">
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -158,29 +177,77 @@
     box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
 }
 </style>
-{% endblock %}
 
-{% block scripts %}
 <script>
-async function saveNotes(violationId, notes) {
+// Simple save function with clear visual feedback
+async function saveNote(violationId) {
+    const textarea = document.getElementById(`notes-${violationId}`);
+    const saveBtn = document.getElementById(`save-btn-${violationId}`);
+    const status = document.getElementById(`status-${violationId}`);
+    const notes = textarea.value.trim();
+    
+    // Disable button and show loading
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Saving...';
+    
+    console.log(`💾 Saving note for violation ${violationId}:`, notes);
+    
     try {
         const response = await fetch(`/violations/${violationId}/notes`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({notes: notes.trim()})
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes: notes })
         });
+        
         if (response.ok) {
-            console.log('✅ Notes saved');
-            // Optional: Show a brief success indicator
-            const textarea = document.querySelector(`textarea[data-violation-id="${violationId}"]`);
-            const originalBg = textarea.style.backgroundColor;
-            textarea.style.backgroundColor = '#d4edda';
-            setTimeout(() => textarea.style.backgroundColor = originalBg, 1000);
+            const result = await response.json();
+            console.log('✅ Save successful:', result);
+            
+            // Show success
+            saveBtn.innerHTML = '<i class="bi bi-check-circle-fill"></i> Saved!';
+            saveBtn.classList.remove('btn-primary');
+            saveBtn.classList.add('btn-success');
+            
+            status.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Saved successfully</span>';
+            status.style.opacity = '1';
+            
+            // Reset button after 2 seconds
+            setTimeout(() => {
+                saveBtn.innerHTML = '<i class="bi bi-save"></i> Save Note';
+                saveBtn.classList.remove('btn-success');
+                saveBtn.classList.add('btn-primary');
+                saveBtn.disabled = false;
+                status.style.opacity = '0';
+            }, 2000);
+            
+        } else {
+            throw new Error(`Server error: ${response.status}`);
         }
-    } catch (e) {
-        console.error('❌ Save failed:', e);
-        alert('Failed to save notes. Please try again.');
+        
+    } catch (error) {
+        console.error('❌ Save failed:', error);
+        
+        // Show error
+        saveBtn.innerHTML = '<i class="bi bi-x-circle-fill"></i> Failed';
+        saveBtn.classList.remove('btn-primary');
+        saveBtn.classList.add('btn-danger');
+        
+        status.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle-fill"></i> Save failed - try again</span>';
+        status.style.opacity = '1';
+        
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            saveBtn.innerHTML = '<i class="bi bi-save"></i> Save Note';
+            saveBtn.classList.remove('btn-danger');
+            saveBtn.classList.add('btn-primary');
+            saveBtn.disabled = false;
+            status.style.opacity = '0';
+        }, 3000);
     }
 }
+
+console.log('📝 Violations page loaded - save buttons ready!');
 </script>
 {% endblock %}

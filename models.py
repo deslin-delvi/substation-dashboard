@@ -20,7 +20,8 @@ class Violation(db.Model):
     image_path = db.Column(db.String(300))
     gate_action = db.Column(db.String(20))
     operator_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    notes = db.Column(db.Text)
+    notes = db.Column(db.Text)  # System-generated notes (auto-filled)
+    supervisor_notes = db.Column(db.Text)  # 🔧 NEW: User-editable supervisor notes
     
     def to_dict(self):
         return {
@@ -29,5 +30,6 @@ class Violation(db.Model):
             'violation_type': self.violation_type,
             'missing_items': self.missing_items,
             'gate_action': self.gate_action,
-            'notes': self.notes
+            'notes': self.notes,
+            'supervisor_notes': self.supervisor_notes
         }
