@@ -74,15 +74,27 @@ def status():
       - ppe_status == "NOT_OK" -> relay_state = "CLOSED"
     When override is ON:
       - relay_state is left as last set by supervisor.
+    
+    🔧 IMPORTANT: This notifies YOLO about gate state changes.
+    YOLO decides whether to capture a photo based on the logic in yolo_detector.py:
+      - Gate OPENS (CLOSED → OPEN): NO photo (approval, no violation)
+      - Gate CLOSES (OPEN → CLOSED) with PPE NOT_OK: YES photo (denial, violation)
     """
     global relay_state, override
     current = yolo.latest_status.copy()
+    
+    # Store previous state to detect changes
+    previous_relay_state = relay_state
 
     if not override:
         if current.get("ppe_status") == "OK":
             relay_state = "OPEN"
         else:
             relay_state = "CLOSED"
+    
+    # Notify YOLO about gate state changes (it decides whether to capture)
+    if previous_relay_state != relay_state:
+        yolo.update_gate_state(relay_state)
 
     current["relay"] = relay_state
     current["override"] = override
@@ -179,36 +191,18 @@ def clear_override():
     global override
     override = False
     
-    # 🔧 FIX: Create timestamp ONCE at the start
+    # 🔧 NEW: Create timestamp once
     violation_timestamp = datetime.now()
-    timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
     
-    # Capture photo when returning to auto mode
-    current_frame = yolo.latest_frame
-    image_filename = None
+    # 🔧 NEW: Use YOLO's capture function
+    image_filename = yolo.capture_gate_violation(
+        gate_action='AUTO_MODE',
+        reason=f'Automatic PPE control restored by {current_user.username}'
+    )
     
-    if current_frame and isinstance(current_frame, bytes):
-        try:
-            nparr = np.frombuffer(current_frame, np.uint8)
-            frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if frame_np is not None and frame_np.size > 0:
-                image_filename = f"auto_restore_{timestamp_str}.jpg"
-                violations_dir = os.path.join(app.root_path, "static", "violations")
-                os.makedirs(violations_dir, exist_ok=True)
-                full_path = os.path.join(violations_dir, image_filename)
-                
-                success = cv2.imwrite(full_path, frame_np)
-                if success:
-                    print(f"✅ Auto mode restore photo saved: {image_filename}")
-                else:
-                    image_filename = None
-        except Exception as e:
-            print(f"❌ Error capturing auto restore photo: {e}")
-    
-    # 🔧 FIX: Use the SAME timestamp for database record
+    # Log restoration of auto mode
     violation = Violation(
-        timestamp=violation_timestamp,  # Use the same datetime object
+        timestamp=violation_timestamp,
         violation_type='auto_mode_restored',
         image_path=image_filename,
         gate_action='AUTO_MODE',
