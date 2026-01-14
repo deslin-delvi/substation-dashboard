@@ -29,6 +29,9 @@ function updateStatus() {
       const helmetEl = document.getElementById('helmet-status');
       const vestEl = document.getElementById('vest-status');
       const glovesEl = document.getElementById('gloves-status');
+      const bootsEl = document.getElementById('boots-status');
+
+
 
       if (data.helmet) {
         helmetEl.classList.add('ok');

@@ -164,6 +164,7 @@ def control_relay():
     if not ppe_status.get('helmet'): missing_items.append('helmet')
     if not ppe_status.get('vest'): missing_items.append('vest')
     if not ppe_status.get('gloves'): missing_items.append('gloves')
+    if not ppe_status.get('boots'): missing_items.append('boots')
 
     # 🔧 FIX: Use the SAME timestamp for database record
     violation = Violation(
