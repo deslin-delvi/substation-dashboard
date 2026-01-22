@@ -41,7 +41,6 @@ class YOLOProcessor:
         self.latest_status = {
             "ppe_status": "UNKNOWN",
             "helmet": False,
-            "vest": False,
             "gloves": False,
             "boots": False
         }
@@ -92,7 +91,6 @@ class YOLOProcessor:
             # Get current PPE status
             missing = []
             if not self.latest_status.get('helmet'): missing.append("helmet")
-            if not self.latest_status.get('vest'): missing.append("vest")
             if not self.latest_status.get('gloves'): missing.append("gloves")
             if not self.latest_status.get('boots'): missing.append("boots")
             
@@ -156,11 +154,10 @@ class YOLOProcessor:
         names = self.model.names
         classes = [names[int(b.cls)] for b in results.boxes]
         helmet = "helmet" in classes
-        vest = "vest" in classes or "safety vest" in classes
         gloves = "gloves" in classes or "glove" in classes
         boots = "boots" in classes
 
-        ok = helmet and vest and gloves and boots
+        ok = helmet and gloves and boots
         new_status = "OK" if ok else "NOT_OK"
 
         # Update status change events (for UI), but don't capture photos
@@ -169,7 +166,6 @@ class YOLOProcessor:
             if elapsed >= self.startup_grace_period:
                 missing = []
                 if not helmet: missing.append("helmet")
-                if not vest: missing.append("vest")
                 if not gloves: missing.append("gloves")
                 if not boots: missing.append("boots")
                 
@@ -188,7 +184,6 @@ class YOLOProcessor:
         self.latest_status.update({
             "ppe_status": new_status,
             "helmet": helmet,
-            "vest": vest,
             "gloves": gloves,
             "boots": boots
         })
@@ -203,7 +198,7 @@ class YOLOProcessor:
             label = f"{class_name} {conf:.2f}"
             
             # Color coding
-            if class_name in ["helmet", "vest", "safety vest", "gloves", "glove", "boots"]:
+            if class_name in ["helmet", "gloves", "glove", "boots"]:
                 color = (0, 255, 0)    # GREEN ✅
                 text_color = (0, 255, 0)
             elif class_name.startswith("no-"):

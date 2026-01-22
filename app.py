@@ -162,7 +162,6 @@ def control_relay():
     ppe_status = yolo.latest_status.copy()
     missing_items = []
     if not ppe_status.get('helmet'): missing_items.append('helmet')
-    if not ppe_status.get('vest'): missing_items.append('vest')
     if not ppe_status.get('gloves'): missing_items.append('gloves')
     if not ppe_status.get('boots'): missing_items.append('boots')
 

@@ -27,7 +27,6 @@ function updateStatus() {
 
       // Update individual PPE indicators
       const helmetEl = document.getElementById('helmet-status');
-      const vestEl = document.getElementById('vest-status');
       const glovesEl = document.getElementById('gloves-status');
       const bootsEl = document.getElementById('boots-status');
 
@@ -41,20 +40,20 @@ function updateStatus() {
         helmetEl.classList.remove('ok');
       }
 
-      if (data.vest) {
-        vestEl.classList.add('ok');
-        vestEl.classList.remove('bad');
-      } else {
-        vestEl.classList.add('bad');
-        vestEl.classList.remove('ok');
-      }
-
       if (data.gloves) {
         glovesEl.classList.add('ok');
         glovesEl.classList.remove('bad');
       } else {
         glovesEl.classList.add('bad');
         glovesEl.classList.remove('ok');
+      }
+      
+      if (data.boots) {
+        bootsEl.classList.add('ok');
+        bootsEl.classList.remove('bad');
+      } else {
+        bootsEl.classList.add('bad');
+        bootsEl.classList.remove('ok');
       }
 
       // Update relay badge
