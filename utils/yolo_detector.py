@@ -48,74 +48,43 @@ class YOLOProcessor:
 
     def capture_gate_violation(self, gate_action, reason=""):
         """
-        🔧 NEW: Only called when gate state CHANGES
-        This is the ONLY function that saves violation photos now
+        Called only when gate state changes
+        ONLY captures and saves image
         """
         import os
         import numpy as np
         from app import app
-        
+
         elapsed = time.time() - self.start_time
         if elapsed < self.startup_grace_period:
-            print(f"⏳ Still in grace period, skipping capture")
+            print("⏳ Still in grace period, skipping capture")
             return None
-        
+
         timestamp = datetime.now()
         timestamp_str = timestamp.strftime("%Y%m%d_%H%M%S")
         image_filename = f"gate_{gate_action.lower()}_{timestamp_str}.jpg"
-        
-        print(f"🎯 GATE ACTION: {gate_action} - Capturing violation...")
-        
-        # Convert JPEG bytes to OpenCV frame
-        if isinstance(self.latest_frame, bytes) and len(self.latest_frame) > 0:
-            nparr = np.frombuffer(self.latest_frame, np.uint8)
-            frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if frame_np is None or frame_np.size == 0:
-                print("❌ Frame decode failed")
-                return None
-        else:
+
+        if not isinstance(self.latest_frame, bytes) or len(self.latest_frame) == 0:
             print("❌ No frame available")
             return None
-        
-        # Save image
+
+        nparr = np.frombuffer(self.latest_frame, np.uint8)
+        frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        if frame_np is None or frame_np.size == 0:
+            print("❌ Frame decode failed")
+            return None
+
         violations_dir = os.path.join(app.root_path, "static", "violations")
         os.makedirs(violations_dir, exist_ok=True)
         full_path = os.path.join(violations_dir, image_filename)
-        
-        success = cv2.imwrite(full_path, frame_np)
-        
-        if success:
+
+        if cv2.imwrite(full_path, frame_np):
             print(f"✅ Image saved: {image_filename}")
-            
-            # Get current PPE status
-            missing = []
-            if not self.latest_status.get('helmet'): missing.append("helmet")
-            if not self.latest_status.get('gloves'): missing.append("gloves")
-            if not self.latest_status.get('boots'): missing.append("boots")
-            
-            # Log to database
-            try:
-                from models import db, Violation
-                with app.app_context():
-                    violation = Violation(
-                        timestamp=timestamp,
-                        violation_type='gate_action',
-                        missing_items=', '.join(missing) if missing else 'N/A',
-                        image_path=image_filename,
-                        gate_action=gate_action,
-                        notes=reason
-                    )
-                    db.session.add(violation)
-                    db.session.commit()
-                    print(f"✅ Database logged: {gate_action} | Missing: {missing}")
-            except Exception as e:
-                print(f"❌ DB Error: {e}")
-            
             return image_filename
-        else:
-            print(f"❌ Failed to save image")
-            return None
+
+        print("❌ Failed to save image")
+        return None
 
     def update_gate_state(self, new_gate_state):
         """

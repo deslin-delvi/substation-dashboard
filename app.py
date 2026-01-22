@@ -199,11 +199,19 @@ def clear_override():
         gate_action='AUTO_MODE',
         reason=f'Automatic PPE control restored by {current_user.username}'
     )
+
+    # Get current PPE status for context
+    ppe_status = yolo.latest_status.copy()
+    missing_items = []
+    if not ppe_status.get('helmet'): missing_items.append('helmet')
+    if not ppe_status.get('gloves'): missing_items.append('gloves')
+    if not ppe_status.get('boots'): missing_items.append('boots')
     
     # Log restoration of auto mode
     violation = Violation(
         timestamp=violation_timestamp,
         violation_type='auto_mode_restored',
+        missing_items=', '.join(missing_items) if missing_items else 'N/A',
         image_path=image_filename,
         gate_action='AUTO_MODE',
         operator_id=current_user.id,
