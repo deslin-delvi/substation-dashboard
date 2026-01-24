@@ -160,20 +160,42 @@ def control_relay():
 
     # Get current PPE status for context
     ppe_status = yolo.latest_status.copy()
-    missing_items = []
-    if not ppe_status.get('helmet'): missing_items.append('helmet')
-    if not ppe_status.get('gloves'): missing_items.append('gloves')
-    if not ppe_status.get('boots'): missing_items.append('boots')
+    
+    # 🔧 IMPROVED: Use negative detections for more accurate violation tracking
+    violations_detected = []
+    if ppe_status.get('no_helmet'): violations_detected.append('no-helmet')
+    if ppe_status.get('no_gloves'): violations_detected.append('no-gloves')
+    if ppe_status.get('no_boots'): violations_detected.append('no-boots')
+    
+    # Fallback to missing items if no negative detections
+    if not violations_detected:
+        missing_items = []
+        if not ppe_status.get('helmet'): missing_items.append('helmet')
+        if not ppe_status.get('gloves'): missing_items.append('gloves')
+        if not ppe_status.get('boots'): missing_items.append('boots')
+    else:
+        missing_items = [v.replace('no-', '') for v in violations_detected]
+    
+    # Determine PPE state for logging
+    has_violation = ppe_status.get('has_violation', False)
+    ppe_state = ppe_status.get('ppe_status', 'UNKNOWN')
+    
+    if has_violation:
+        ppe_description = f"VIOLATION DETECTED: {', '.join(violations_detected)}"
+    elif ppe_state == "OK":
+        ppe_description = "COMPLETE PPE"
+    else:
+        ppe_description = "NO PERSON DETECTED"
 
     # 🔧 FIX: Use the SAME timestamp for database record
     violation = Violation(
-        timestamp=violation_timestamp,  # Use the same datetime object
+        timestamp=violation_timestamp,
         violation_type='manual_override',
         missing_items=', '.join(missing_items) if missing_items else 'N/A',
         image_path=image_filename,
         gate_action=gate_action,
         operator_id=current_user.id,
-        notes=f'{msg} by {current_user.username}. PPE Status: {"COMPLETE" if not missing_items else "INCOMPLETE"}'
+        notes=f'{msg} by {current_user.username}. PPE Status: {ppe_description}'
     )
     db.session.add(violation)
     db.session.commit()
@@ -182,7 +204,9 @@ def control_relay():
         "relay": relay_state,
         "override": override,
         "message": msg,
-        "image_captured": image_filename is not None
+        "image_captured": image_filename is not None,
+        "ppe_status": ppe_state,
+        "violations": violations_detected if has_violation else []
     })
 
 @app.route("/control/auto", methods=["POST"])
@@ -191,38 +215,69 @@ def clear_override():
     global override
     override = False
     
-    # 🔧 NEW: Create timestamp once
+    # Get current PPE status
+    ppe_status = yolo.latest_status.copy()
+    
+    # 🔧 FIX: Check if there's an ACTUAL violation (negative classes detected)
+    has_violation = ppe_status.get('has_violation', False)
+    no_helmet = ppe_status.get('no_helmet', False)
+    no_gloves = ppe_status.get('no_gloves', False)
+    no_boots = ppe_status.get('no_boots', False)
+    
+    # Build list of actual violations
+    violations = []
+    if no_helmet: violations.append('helmet')
+    if no_gloves: violations.append('gloves')
+    if no_boots: violations.append('boots')
+    
+    image_filename = None
     violation_timestamp = datetime.now()
     
-    # 🔧 NEW: Use YOLO's capture function
-    image_filename = yolo.capture_gate_violation(
-        gate_action='AUTO_MODE',
-        reason=f'Automatic PPE control restored by {current_user.username}'
-    )
-
-    # Get current PPE status for context
-    ppe_status = yolo.latest_status.copy()
-    missing_items = []
-    if not ppe_status.get('helmet'): missing_items.append('helmet')
-    if not ppe_status.get('gloves'): missing_items.append('gloves')
-    if not ppe_status.get('boots'): missing_items.append('boots')
-    
-    # Log restoration of auto mode
-    violation = Violation(
-        timestamp=violation_timestamp,
-        violation_type='auto_mode_restored',
-        missing_items=', '.join(missing_items) if missing_items else 'N/A',
-        image_path=image_filename,
-        gate_action='AUTO_MODE',
-        operator_id=current_user.id,
-        notes=f'Automatic PPE control restored by {current_user.username}'
-    )
-    db.session.add(violation)
-    db.session.commit()
+    # 🔧 CRITICAL: Only capture if there are ACTUAL violations detected
+    if has_violation and violations:
+        print(f"⚠️ Auto mode restored WITH active PPE violations: {violations}")
+        image_filename = yolo.capture_gate_violation(
+            gate_action='AUTO_MODE',
+            reason=f'Auto control restored by {current_user.username} - Active violations: {", ".join(violations)}'
+        )
+        
+        # Log the violation
+        violation = Violation(
+            timestamp=violation_timestamp,
+            violation_type='auto_mode_restored',
+            missing_items=', '.join(violations),
+            image_path=image_filename,
+            gate_action='AUTO_MODE',
+            operator_id=current_user.id,
+            notes=f'Auto control restored by {current_user.username} - Person detected without: {", ".join(violations)}'
+        )
+        db.session.add(violation)
+        db.session.commit()
+        print(f"📸 Violation captured and logged")
+        
+    else:
+        # No actual violation (just background or complete PPE)
+        ppe_state = "complete PPE" if ppe_status.get('ppe_status') == 'OK' else "no person detected"
+        print(f"✅ Auto mode restored - {ppe_state} - NO violation logged")
+        
+        # Optional: Log the mode change without creating a violation record
+        violation = Violation(
+            timestamp=violation_timestamp,
+            violation_type='auto_mode_restored',
+            missing_items='N/A',
+            image_path=None,
+            gate_action='AUTO_MODE',
+            operator_id=current_user.id,
+            notes=f'Auto control restored by {current_user.username} - {ppe_state}'
+        )
+        db.session.add(violation)
+        db.session.commit()
     
     return jsonify({
         "override": False,
         "message": "Automatic PPE control restored",
+        "violation_detected": has_violation,
+        "violations": violations if has_violation else []
     })
 
 @app.route('/violations')
