@@ -7,10 +7,12 @@ import time
 import os
 import cv2
 import numpy as np
+import atexit
 
 # Local imports
 from utils.yolo_detector import YOLOProcessor
 from models import db, User, Violation
+from hardware_controller import GateController  # 🔧 NEW: Import hardware controller
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-super-secret-key-change-this-in-production'
@@ -24,7 +26,20 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Start YOLO processor (update path if your weights are elsewhere)
+# 🔧 NEW: Initialize hardware controller
+# Change mode to 'relay' if using relay module
+gate_controller = GateController(mode='direct', servo_pin=18, relay_pin=17)
+
+# Cleanup GPIO on exit
+def cleanup_on_exit():
+    print("\n🛑 Shutting down...")
+    yolo.stop()
+    gate_controller.cleanup()
+    print("✅ Cleanup complete")
+
+atexit.register(cleanup_on_exit)
+
+# Start YOLO processor (update camera_index if needed, usually 0 for USB webcam)
 yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0)
 yolo.start()
 
@@ -75,10 +90,7 @@ def status():
     When override is ON:
       - relay_state is left as last set by supervisor.
     
-    🔧 IMPORTANT: This notifies YOLO about gate state changes.
-    YOLO decides whether to capture a photo based on the logic in yolo_detector.py:
-      - Gate OPENS (CLOSED → OPEN): NO photo (approval, no violation)
-      - Gate CLOSES (OPEN → CLOSED) with PPE NOT_OK: YES photo (denial, violation)
+    🔧 NEW: Now controls actual hardware gate!
     """
     global relay_state, override
     current = yolo.latest_status.copy()
@@ -92,8 +104,9 @@ def status():
         else:
             relay_state = "CLOSED"
     
-    # Notify YOLO about gate state changes (it decides whether to capture)
+    # 🔧 NEW: Control actual hardware gate when state changes
     if previous_relay_state != relay_state:
+        gate_controller.set_state(relay_state)
         yolo.update_gate_state(relay_state)
 
     current["relay"] = relay_state
@@ -111,11 +124,11 @@ def events():
 @app.route('/control/relay', methods=['POST'])
 @login_required
 def control_relay():
-    """Manual override - logs supervisor action + CAPTURES CURRENT FRAME"""
+    """Manual override - logs supervisor action + CAPTURES CURRENT FRAME + CONTROLS HARDWARE"""
     global relay_state, override
     override = True
 
-    # 🔧 FIX: Create timestamp ONCE at the start
+    # Create timestamp ONCE at the start
     violation_timestamp = datetime.now()
     timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
 
@@ -158,10 +171,13 @@ def control_relay():
         msg = "Manual override: gate OPENED by supervisor"
         gate_action = "MANUAL_OPEN"
 
+    # 🔧 NEW: Control actual hardware gate
+    gate_controller.set_state(relay_state)
+
     # Get current PPE status for context
     ppe_status = yolo.latest_status.copy()
     
-    # 🔧 IMPROVED: Use negative detections for more accurate violation tracking
+    # Use negative detections for more accurate violation tracking
     violations_detected = []
     if ppe_status.get('no_helmet'): violations_detected.append('no-helmet')
     if ppe_status.get('no_gloves'): violations_detected.append('no-gloves')
@@ -187,7 +203,7 @@ def control_relay():
     else:
         ppe_description = "NO PERSON DETECTED"
 
-    # 🔧 FIX: Use the SAME timestamp for database record
+    # Save to database
     violation = Violation(
         timestamp=violation_timestamp,
         violation_type='manual_override',
@@ -212,13 +228,14 @@ def control_relay():
 @app.route("/control/auto", methods=["POST"])
 @login_required
 def clear_override():
+    """Resume automatic control + CONTROLS HARDWARE"""
     global override
     override = False
     
     # Get current PPE status
     ppe_status = yolo.latest_status.copy()
     
-    # 🔧 FIX: Check if there's an ACTUAL violation (negative classes detected)
+    # Check if there's an ACTUAL violation (negative classes detected)
     has_violation = ppe_status.get('has_violation', False)
     no_helmet = ppe_status.get('no_helmet', False)
     no_gloves = ppe_status.get('no_gloves', False)
@@ -233,7 +250,7 @@ def clear_override():
     image_filename = None
     violation_timestamp = datetime.now()
     
-    # 🔧 CRITICAL: Only capture if there are ACTUAL violations detected
+    # Only capture if there are ACTUAL violations detected
     if has_violation and violations:
         print(f"⚠️ Auto mode restored WITH active PPE violations: {violations}")
         image_filename = yolo.capture_gate_violation(
@@ -293,7 +310,7 @@ def violations():
 @app.route('/violations/<int:id>/notes', methods=['POST'])
 @login_required
 def add_violation_notes(id):
-    """🔧 FIX: Save to supervisor_notes field, not notes"""
+    """Save to supervisor_notes field"""
     violation = Violation.query.get_or_404(id)
     supervisor_notes = request.json.get('notes')
     
@@ -333,6 +350,16 @@ def video_feed():
 
 if __name__ == "__main__":
     with app.app_context():
-        db.create_all()  # ← Creates substation.db + tables automatically
+        db.create_all()  # Creates substation.db + tables automatically
+    
+    print("\n" + "="*50)
+    print("🚀 SUBSTATION PPE MONITORING SYSTEM")
+    print("="*50)
+    print(f"📹 Camera: USB Webcam (index 0)")
+    print(f"🤖 Model: YOLOv11 (models/best.pt)")
+    print(f"🔧 Hardware: {'GPIO ENABLED' if gate_controller else 'SIMULATION MODE'}")
+    print(f"🚪 Gate: {gate_controller.get_state()}")
+    print("="*50 + "\n")
+    
     # IMPORTANT: disable reloader so the camera is not opened twice
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)

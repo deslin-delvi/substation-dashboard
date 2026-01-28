@@ -3,6 +3,7 @@ from ultralytics import YOLO
 import cv2
 import threading
 import time
+import platform
 from datetime import datetime
 
 try:
@@ -31,8 +32,12 @@ class YOLOProcessor:
         self.start_time = time.time()
 
         # Open camera
-        self.cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-        print("Opened:", self.cap.isOpened())
+        # Updated code with explicit V4L2 backend:
+        if platform.system() == 'Windows':
+            self.cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+        else:
+            # Linux/Raspberry Pi - use V4L2 backend explicitly
+            self.cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
 
         self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
