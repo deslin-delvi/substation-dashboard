@@ -8,6 +8,7 @@ import os
 import cv2
 import numpy as np
 import atexit
+import threading
 
 # Local imports
 from utils.yolo_detector import YOLOProcessor
@@ -29,6 +30,9 @@ login_manager.login_view = 'login'
 # 🔧 NEW: Initialize hardware controller
 # Change mode to 'relay' if using relay module
 gate_controller = GateController(mode='direct', servo_pin=18, relay_pin=17)
+gate_state_lock = threading.Lock()
+relay_state = "CLOSED"
+override = False
 
 # Cleanup GPIO on exit
 def cleanup_on_exit():
@@ -84,36 +88,33 @@ def index():
 @login_required
 def status():
     """
-    Automatic logic when override is OFF:
-      - ppe_status == "OK"     -> relay_state = "OPEN"
-      - ppe_status == "NOT_OK" -> relay_state = "CLOSED"
-    When override is ON:
-      - relay_state is left as last set by supervisor.
-    
-    🔧 NEW: Now controls actual hardware gate!
+    🔧 FIXED: Thread-safe gate state management
     """
     global relay_state, override
-    current = yolo.latest_status.copy()
     
-    # Store previous state to detect changes
-    previous_relay_state = relay_state
-
-    if not override:
-        if current.get("ppe_status") == "OK":
-            relay_state = "OPEN"
-        else:
-            relay_state = "CLOSED"
+    # 🔧 Thread-safe read of YOLO status
+    with gate_state_lock:
+        current = yolo.latest_status.copy()
+        previous_relay_state = relay_state
+        
+        if not override:
+            if current.get("ppe_status") == "OK":
+                relay_state = "OPEN"
+            else:
+                relay_state = "CLOSED"
+        
+        # 🔧 Control hardware INSIDE the lock to prevent double-execution
+        if previous_relay_state != relay_state:
+            gate_controller.set_state(relay_state)
+            yolo.update_gate_state(relay_state)
+        
+        # Prepare response data
+        response_data = current.copy()
+        response_data["relay"] = relay_state
+        response_data["override"] = override
+        response_data['last_updated'] = datetime.now().strftime('%H:%M:%S')
     
-    # 🔧 NEW: Control actual hardware gate when state changes
-    if previous_relay_state != relay_state:
-        gate_controller.set_state(relay_state)
-        yolo.update_gate_state(relay_state)
-
-    current["relay"] = relay_state
-    current["override"] = override
-    current['last_updated'] = datetime.now().strftime('%H:%M:%S')
-    return jsonify(current)
-
+    return jsonify(response_data)
 
 @app.route('/events')
 @login_required
@@ -124,58 +125,57 @@ def events():
 @app.route('/control/relay', methods=['POST'])
 @login_required
 def control_relay():
-    """Manual override - logs supervisor action + CAPTURES CURRENT FRAME + CONTROLS HARDWARE"""
+    """🔧 FIXED: Thread-safe manual override"""
     global relay_state, override
-    override = True
-
-    # Create timestamp ONCE at the start
-    violation_timestamp = datetime.now()
-    timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
-
-    # Capture current frame from camera
-    current_frame = yolo.latest_frame
-    image_filename = None
     
-    if current_frame and isinstance(current_frame, bytes):
-        try:
-            # Decode JPEG bytes to OpenCV frame
-            nparr = np.frombuffer(current_frame, np.uint8)
-            frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            
-            if frame_np is not None and frame_np.size > 0:
-                # Save the image
-                image_filename = f"override_{timestamp_str}.jpg"
-                violations_dir = os.path.join(app.root_path, "static", "violations")
-                os.makedirs(violations_dir, exist_ok=True)
-                full_path = os.path.join(violations_dir, image_filename)
+    # 🔧 Use lock for thread-safe state modification
+    with gate_state_lock:
+        override = True
+        
+        # Create timestamp ONCE
+        violation_timestamp = datetime.now()
+        timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
+        
+        # Capture current frame
+        current_frame = yolo.latest_frame
+        image_filename = None
+        
+        if current_frame and isinstance(current_frame, bytes):
+            try:
+                nparr = np.frombuffer(current_frame, np.uint8)
+                frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 
-                success = cv2.imwrite(full_path, frame_np)
-                if success:
-                    print(f"✅ Manual override photo saved: {image_filename}")
-                else:
-                    print(f"❌ Failed to save override photo")
-                    image_filename = None
-            else:
-                print("❌ Frame decode failed")
-        except Exception as e:
-            print(f"❌ Error capturing override photo: {e}")
-            image_filename = None
-
-    # Toggle relay state
-    if relay_state == "OPEN":
-        relay_state = "CLOSED"
-        msg = "Manual override: gate CLOSED by supervisor"
-        gate_action = "MANUAL_CLOSE"
-    else:
-        relay_state = "OPEN"
-        msg = "Manual override: gate OPENED by supervisor"
-        gate_action = "MANUAL_OPEN"
-
-    # 🔧 NEW: Control actual hardware gate
-    gate_controller.set_state(relay_state)
-
-    # Get current PPE status for context
-    ppe_status = yolo.latest_status.copy()
+                if frame_np is not None and frame_np.size > 0:
+                    image_filename = f"override_{timestamp_str}.jpg"
+                    violations_dir = os.path.join(app.root_path, "static", "violations")
+                    os.makedirs(violations_dir, exist_ok=True)
+                    full_path = os.path.join(violations_dir, image_filename)
+                    
+                    success = cv2.imwrite(full_path, frame_np)
+                    if success:
+                        print(f"✅ Manual override photo saved: {image_filename}")
+                    else:
+                        print(f"❌ Failed to save override photo")
+                        image_filename = None
+            except Exception as e:
+                print(f"❌ Error capturing override photo: {e}")
+                image_filename = None
+        
+        # Toggle relay state
+        if relay_state == "OPEN":
+            relay_state = "CLOSED"
+            msg = "Manual override: gate CLOSED by supervisor"
+            gate_action = "MANUAL_CLOSE"
+        else:
+            relay_state = "OPEN"
+            msg = "Manual override: gate OPENED by supervisor"
+            gate_action = "MANUAL_OPEN"
+        
+        # 🔧 Control hardware INSIDE lock
+        gate_controller.set_state(relay_state)
+        
+        # Get current PPE status
+        ppe_status = yolo.latest_status.copy()
     
     # Use negative detections for more accurate violation tracking
     violations_detected = []
@@ -216,24 +216,30 @@ def control_relay():
     db.session.add(violation)
     db.session.commit()
 
-    return jsonify({
+    response_data = {
         "relay": relay_state,
         "override": override,
         "message": msg,
         "image_captured": image_filename is not None,
-        "ppe_status": ppe_state,
+        "ppe_status": ppe_status.get('ppe_status', 'UNKNOWN'),
         "violations": violations_detected if has_violation else []
-    })
+    }
+    return jsonify(response_data)
+
+
 
 @app.route("/control/auto", methods=["POST"])
 @login_required
 def clear_override():
-    """Resume automatic control + CONTROLS HARDWARE"""
+    """🔧 FIXED: Thread-safe automatic control resume"""
     global override
-    override = False
     
-    # Get current PPE status
-    ppe_status = yolo.latest_status.copy()
+    # 🔧 Use lock for thread-safe state modification
+    with gate_state_lock:
+        override = False
+        
+        # Get current PPE status
+        ppe_status = yolo.latest_status.copy()
     
     # Check if there's an ACTUAL violation (negative classes detected)
     has_violation = ppe_status.get('has_violation', False)
@@ -290,12 +296,14 @@ def clear_override():
         db.session.add(violation)
         db.session.commit()
     
-    return jsonify({
-        "override": False,
-        "message": "Automatic PPE control restored",
-        "violation_detected": has_violation,
-        "violations": violations if has_violation else []
-    })
+    response_data = {
+            "override": False,
+            "message": "Automatic PPE control restored",
+            "violation_detected": has_violation,
+            "violations": violations if has_violation else []
+        }
+    
+    return jsonify(response_data)
 
 @app.route('/violations')
 @login_required

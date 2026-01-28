@@ -20,3 +20,6 @@ __pycache__/
 #violation images
 static/violations/*
 !static/violations/.gitkeep
+
+#commands
+raspberry_commands.txt
