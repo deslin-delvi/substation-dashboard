@@ -15,9 +15,10 @@ except ImportError:
     print("⚠️ Database not available - running in mock mode")
 
 class YOLOProcessor:
-    def __init__(self, model_path="models/best.pt", camera_index=0):
+    def __init__(self, model_path="models/best.pt", camera_index=0, flask_app=None):
         # Load model
         self.model = YOLO(model_path)
+        self.flask_app = flask_app
 
         # Events + status tracking
         self.events = []
@@ -58,7 +59,6 @@ class YOLOProcessor:
         """
         import os
         import numpy as np
-        from app import app
 
         elapsed = time.time() - self.start_time
         if elapsed < self.startup_grace_period:
@@ -80,7 +80,11 @@ class YOLOProcessor:
             print("❌ Frame decode failed")
             return None
 
-        violations_dir = os.path.join(app.root_path, "static", "violations")
+        if self.flask_app is None:
+            print("⚠️ Flask app not available, cannot save image")
+            return None
+            
+        violations_dir = os.path.join(self.flask_app.root_path, "static", "violations")
         os.makedirs(violations_dir, exist_ok=True)
         full_path = os.path.join(violations_dir, image_filename)
 
@@ -115,8 +119,6 @@ class YOLOProcessor:
                     
                     # 🔧 NEW: Save to database
                     if image_filename:
-                        from app import app
-                        from models import db, Violation
                         
                         # Get missing items
                         missing_items = []
@@ -124,19 +126,24 @@ class YOLOProcessor:
                         if self.latest_status.get('no_gloves'): missing_items.append('gloves')
                         if self.latest_status.get('no_boots'): missing_items.append('boots')
                         
-                        with app.app_context():
-                            violation = Violation(
-                                timestamp=datetime.now(),
-                                violation_type='auto_denied',
-                                missing_items=', '.join(missing_items) if missing_items else 'N/A',
-                                image_path=image_filename,
-                                gate_action='AUTO_DENIED',
-                                operator_id=None,  # Automatic, no operator
-                                notes=f'Gate automatically closed - PPE violations detected: {", ".join(missing_items)}'
-                            )
-                            db.session.add(violation)
-                            db.session.commit()
-                            print(f"✅ AUTO_DENIED violation saved to database")
+                        if self.flask_app:
+                            try:
+                                with self.flask_app.app_context():
+                                    violation = Violation(
+                                        timestamp=datetime.now(),
+                                        violation_type='auto_denied',
+                                        missing_items=', '.join(missing_items) if missing_items else 'N/A',
+                                        image_path=image_filename,
+                                        gate_action='AUTO_DENIED',
+                                        operator_id=None,  # Automatic, no operator
+                                        notes=f'Gate automatically closed - PPE violations detected: {", ".join(missing_items)}'
+                                    )
+                                    db.session.add(violation)
+                                    db.session.commit()
+                                    print(f"✅ AUTO_DENIED violation saved to database")
+                            except Exception as e:
+                                print(f"❌ Error saving violation to database: {e}")
+
                     
                     print(f"📸 Violation captured: Gate CLOSED due to missing PPE")
                 elif self.prev_gate_state == "OPEN":

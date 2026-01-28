@@ -40,7 +40,7 @@ def cleanup_on_exit():
 atexit.register(cleanup_on_exit)
 
 # Start YOLO processor (update camera_index if needed, usually 0 for USB webcam)
-yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0)
+yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0, flask_app=app)
 yolo.start()
 
 relay_state = "CLOSED"   # gate starts closed
