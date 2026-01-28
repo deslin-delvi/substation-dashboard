@@ -47,9 +47,6 @@ atexit.register(cleanup_on_exit)
 yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0, flask_app=app)
 yolo.start()
 
-relay_state = "CLOSED"   # gate starts closed
-override = False         # manual override flag
-
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))

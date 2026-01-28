@@ -14,10 +14,18 @@ body {
 .video-container {
     position: relative;
     background: #000;
-    min-height: 450px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    width: 100%;
+    overflow: hidden;  /* 🔧 NEW: Clips any overflow */
+    display: block;    /* 🔧 CHANGED: from flex to block */
+}
+
+/* 🔧 NEW: Proper video styling */
+#video-feed {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;  /* Prevents grey bars */
+    vertical-align: middle; /* Removes inline image spacing */
 }
 
 .video-overlay {
