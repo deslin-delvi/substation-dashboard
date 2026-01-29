@@ -173,3 +173,142 @@ body {
         min-height: 300px;
     }
 }
+
+/* ========================================
+   📱 MOBILE OPTIMIZATIONS
+   ======================================== */
+
+/* Tablets and below (≤992px) */
+@media (max-width: 992px) {
+    .navbar-brand {
+        font-size: 1rem !important;
+    }
+    
+    .video-container {
+        min-height: 300px;
+    }
+}
+
+/* Mobile phones (≤768px) */
+@media (max-width: 768px) {
+    .container-fluid {
+        padding-left: 12px !important;
+        padding-right: 12px !important;
+    }
+    
+    .card {
+        margin-bottom: 1rem;
+    }
+    
+    .card-body {
+        padding: 1rem !important;
+    }
+    
+    .card-header {
+        padding: 0.75rem;
+        font-size: 0.95rem;
+    }
+    
+    /* Compact PPE items */
+    .ppe-item {
+        padding: 10px;
+        font-size: 0.9rem;
+    }
+    
+    /* Touch-friendly buttons */
+    .btn {
+        padding: 0.75rem 1rem;
+        font-size: 1rem;
+        min-height: 44px;
+    }
+    
+    /* Reduce event log height */
+    .event-log {
+        max-height: 250px;
+    }
+    
+    .event-item {
+        padding: 10px 12px;
+    }
+    
+    /* Video adjustments */
+    .video-container {
+        min-height: 250px;
+    }
+    
+    .video-overlay .badge {
+        font-size: 0.75rem;
+        padding: 0.35rem 0.65rem;
+    }
+}
+
+/* Small phones (≤576px) */
+@media (max-width: 576px) {
+    .navbar-brand {
+        font-size: 0.9rem !important;
+    }
+    
+    .card-header {
+        font-size: 0.85rem;
+    }
+    
+    .ppe-item {
+        padding: 8px;
+        font-size: 0.85rem;
+    }
+    
+    .btn {
+        font-size: 0.9rem;
+        padding: 0.65rem 0.85rem;
+    }
+    
+    .status-pill {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.65rem;
+    }
+    
+    /* Smaller status alert */
+    .alert {
+        font-size: 0.9rem;
+        padding: 0.75rem;
+    }
+}
+
+/* Touch devices - ensure tap targets are big enough */
+@media (hover: none) and (pointer: coarse) {
+    .btn, .nav-link, .ppe-item {
+        min-height: 44px;
+    }
+    
+    /* Prevent zoom on input focus */
+    input, select, textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* Better navbar styling */
+.navbar-nav .nav-link {
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.375rem;
+    transition: all 0.2s;
+}
+
+.navbar-nav .nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.navbar-text {
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 0.375rem;
+}
+
+/* Logout button styling */
+.navbar-nav .btn-outline-light {
+    border-width: 1.5px;
+}
+
+.navbar-nav .btn-outline-light:hover {
+    background-color: #fff;
+    color: #212529;
+}

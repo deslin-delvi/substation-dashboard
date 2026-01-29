@@ -19,30 +19,44 @@
 </head>
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-dark bg-dark shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
         <div class="container-fluid">
             <span class="navbar-brand mb-0 h1">
                 <i class="bi bi-shield-check"></i> Substation PPE Safety System
+                <span class="badge bg-success ms-2">LIVE</span>
             </span>
             
-            <!-- Status Badge -->
-            <span class="badge bg-success me-3">LIVE</span>
+            <!-- Mobile Toggle -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" 
+                    data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
             
-            <!-- User Navigation (only visible when logged in) -->
+            <!-- User Navigation -->
             {% if current_user.is_authenticated %}
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link" href="/">
-                    <i class="bi bi-house"></i> Live Dashboard
-                </a>
-                <a class="nav-link" href="/violations">
-                    <i class="bi bi-exclamation-triangle"></i> Violations
-                </a>
-                <span class="navbar-text me-3">
-                    <i class="bi bi-person"></i> {{ current_user.username }}
-                </span>
-                <a class="nav-link" href="/logout">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </a>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item mx-2">
+                        <a class="nav-link" href="/">
+                            <i class="bi bi-house"></i> Live Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item mx-2">
+                        <a class="nav-link" href="/violations">
+                            <i class="bi bi-exclamation-triangle"></i> Violations
+                        </a>
+                    </li>
+                    <li class="nav-item mx-3">
+                        <span class="navbar-text text-white">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </span>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link btn btn-outline-light btn-sm px-3" href="/logout">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </a>
+                    </li>
+                </ul>
             </div>
             {% endif %}
         </div>
