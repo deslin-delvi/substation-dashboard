@@ -40,8 +40,8 @@ class YOLOProcessor:
             # Linux/Raspberry Pi - use V4L2 backend explicitly
             self.cap = cv2.VideoCapture(camera_index, cv2.CAP_V4L2)
 
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
         self.latest_frame = None  # JPEG bytes
         self.latest_status = {
@@ -254,16 +254,30 @@ class YOLOProcessor:
         print(f"⏳ YOLO processor starting with {self.startup_grace_period}s grace period...")
         print(f"📸 Violations ONLY captured on: Manual Override + Gate State Changes")
         
+        frame_count = 0
+        prev_time = time.time()
+        
         while self.running:
             ok, frame = self.cap.read()
             if not ok:
                 time.sleep(0.05)
                 continue
             
+            frame_count += 1
+            if frame_count % 2 != 0:  # Process every 2nd frame
+                continue
+            
             # YOLO inference
-            results = self.model(frame, verbose=False)[0]
+            results = self.model(frame, verbose=False, imgsz=320)[0]
             self._process_results(results)
             self._draw_boxes(frame, results)
+            
+            # Calculate and draw FPS
+            curr_time = time.time()
+            self.fps = round(1 / (curr_time - prev_time), 1)
+            prev_time = curr_time
+            cv2.putText(frame, f"FPS: {self.fps}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Encode frame
             ret, jpeg = cv2.imencode(".jpg", frame)

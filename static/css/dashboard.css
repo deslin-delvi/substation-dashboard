@@ -10,22 +10,19 @@ body {
     background: #f8f9fa;
 }
 
-/* Video Container */
 .video-container {
     position: relative;
     background: #000;
     width: 100%;
-    overflow: hidden;  /* 🔧 NEW: Clips any overflow */
-    display: block;    /* 🔧 CHANGED: from flex to block */
+    overflow: hidden;
 }
 
-/* 🔧 NEW: Proper video styling */
 #video-feed {
     width: 100%;
-    height: auto;
+    height: 100%;
     display: block;
-    object-fit: cover;  /* Prevents grey bars */
-    vertical-align: middle; /* Removes inline image spacing */
+    object-fit: fill;     /* Stretch to fill completely */
+    vertical-align: middle;
 }
 
 .video-overlay {
