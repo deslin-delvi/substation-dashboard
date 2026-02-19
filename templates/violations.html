@@ -35,6 +35,10 @@
                 <span class="badge bg-danger">
                     <i class="bi bi-shield-x"></i> PPE VIOLATION
                 </span>
+                {% elif violation.violation_type == 'rtsp_auto_detected' %}
+                <span class="badge bg-danger">
+                    <i class="bi bi-camera-video"></i> CCTV DETECTION
+                </span>
                 {% endif %}
             </div>
             

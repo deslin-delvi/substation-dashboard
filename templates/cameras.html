@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}CCTV Camera Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-0"><i class="bi bi-camera-video-fill me-2 text-primary"></i>CCTV / RTSP Cameras</h4>
+      <small class="text-muted">Live PPE detection on RTSP streams</small>
+    </div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCameraModal">
+      <i class="bi bi-plus-circle me-1"></i> Add Camera
+    </button>
+  </div>
+
+  <!-- Alert area -->
+  <div id="alertArea"></div>
+
+  <!-- Camera grid -->
+  {% if cameras %}
+  <div class="row g-3" id="cameraGrid">
+    {% for cam in cameras %}
+    <div class="col-12 col-md-6 col-xl-4" id="card-{{ cam.id }}">
+      <div class="card h-100 shadow-sm border-0">
+
+        <!-- Live feed -->
+        <div class="position-relative bg-dark" style="height:220px; overflow:hidden; border-radius:.5rem .5rem 0 0;">
+          {% if cam.enabled %}
+          <img src="{{ url_for('rtsp_video_feed', camera_id=cam.id) }}"
+               class="w-100 h-100" style="object-fit:cover;"
+               onerror="this.src='/static/img/no-signal.png'">
+          {% else %}
+          <div class="d-flex align-items-center justify-content-center h-100">
+            <span class="text-secondary"><i class="bi bi-camera-video-off fs-1"></i><br>Stream disabled</span>
+          </div>
+          {% endif %}
+
+          <!-- PPE badge overlay -->
+          <span id="badge-{{ cam.id }}"
+                class="position-absolute top-0 end-0 m-2 badge
+                       {% if cam.enabled %}bg-secondary{% else %}bg-dark{% endif %}
+                       fs-6">
+            {% if cam.enabled %}Connecting…{% else %}OFF{% endif %}
+          </span>
+        </div>
+
+        <div class="card-body pb-2">
+          <h6 class="card-title mb-1">
+            {{ cam.name }}
+            <span class="badge {{ 'bg-success' if cam.enabled else 'bg-secondary' }} ms-1" style="font-size:.65rem;">
+              {{ 'ENABLED' if cam.enabled else 'DISABLED' }}
+            </span>
+          </h6>
+          {% if cam.location %}
+          <small class="text-muted"><i class="bi bi-geo-alt"></i> {{ cam.location }}</small><br>
+          {% endif %}
+          <small class="text-muted"><i class="bi bi-link-45deg"></i>
+            <span title="{{ cam.url }}">{{ cam.url[:55] }}{% if cam.url|length > 55 %}…{% endif %}</span>
+          </small>
+        </div>
+
+        <div class="card-footer bg-transparent border-0 d-flex gap-2 pb-3 px-3">
+          <!-- Toggle -->
+          <button class="btn btn-sm {{ 'btn-outline-warning' if cam.enabled else 'btn-outline-success' }} flex-grow-1"
+                  onclick="toggleCamera({{ cam.id }}, {{ cam.enabled|lower }})">
+            <i class="bi {{ 'bi-pause-circle' if cam.enabled else 'bi-play-circle' }}"></i>
+            {{ 'Disable' if cam.enabled else 'Enable' }}
+          </button>
+          <!-- Delete -->
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="deleteCamera({{ cam.id }}, '{{ cam.name|e }}')">
+            <i class="bi bi-trash3"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% else %}
+  <!-- Empty state -->
+  <div class="text-center py-5 text-muted">
+    <i class="bi bi-camera-video-off" style="font-size:4rem;"></i>
+    <h5 class="mt-3">No cameras registered yet</h5>
+    <p>Click <strong>Add Camera</strong> to connect your first RTSP / CCTV stream.</p>
+  </div>
+  {% endif %}
+
+</div>
+
+
+<!-- ───── Add Camera Modal ───── -->
+<div class="modal fade" id="addCameraModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-camera-video-fill me-2"></i>Add RTSP Camera</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Camera Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control" id="camName"
+                 placeholder="e.g. Gate A Camera">
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">RTSP URL <span class="text-danger">*</span></label>
+          <input type="text" class="form-control font-monospace" id="camUrl"
+                 placeholder="rtsp://admin:password@192.168.1.100:554/stream1">
+          <div class="form-text">
+            Supports <code>rtsp://</code>, <code>rtmp://</code>, <code>http://</code> (MJPEG), <code>https://</code>
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Location <span class="text-muted">(optional)</span></label>
+          <input type="text" class="form-control" id="camLocation"
+                 placeholder="e.g. North perimeter, Gate B">
+        </div>
+
+        <!-- Quick-fill examples -->
+        <div class="alert alert-info py-2 small">
+          <strong>Common URL formats:</strong><br>
+          <code>rtsp://admin:pass@192.168.1.x:554/Streaming/Channels/101</code> – Hikvision<br>
+          <code>rtsp://admin:pass@192.168.1.x:554/cam/realmonitor?channel=1&subtype=0</code> – Dahua<br>
+          <code>rtsp://192.168.1.x:8554/stream</code> – Generic / Raspberry Pi camera server
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-primary" onclick="addCamera()">
+          <i class="bi bi-plus-circle me-1"></i>Add &amp; Start Stream
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ── status polling ───────────────────────────────────── */
+const STATUS_INTERVAL = 3000;   // ms
+
+function startPolling() {
+  setInterval(async () => {
+    try {
+      const res  = await fetch('/cameras/status/all');
+      const data = await res.json();
+
+      for (const [camId, status] of Object.entries(data)) {
+        const badge = document.getElementById(`badge-${camId}`);
+        if (!badge) continue;
+
+        const ppe = status.ppe_status || 'UNKNOWN';
+        badge.textContent = ppe + (status.fps ? ` | ${status.fps} fps` : '');
+
+        badge.className = 'position-absolute top-0 end-0 m-2 badge fs-6 ' +
+          (ppe === 'OK'      ? 'bg-success' :
+           ppe === 'NOT_OK'  ? 'bg-danger'  :
+           ppe === 'OFFLINE' ? 'bg-dark'    : 'bg-secondary');
+      }
+    } catch (e) { /* ignore transient errors */ }
+  }, STATUS_INTERVAL);
+}
+
+/* ── add camera ───────────────────────────────────────── */
+async function addCamera() {
+  const name     = document.getElementById('camName').value.trim();
+  const url      = document.getElementById('camUrl').value.trim();
+  const location = document.getElementById('camLocation').value.trim();
+
+  if (!name || !url) {
+    showAlert('danger', 'Camera name and URL are required.');
+    return;
+  }
+
+  const res  = await fetch('/cameras/add', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ name, url, location }),
+  });
+  const data = await res.json();
+
+  if (data.status === 'success') {
+    showAlert('success', `✅ Camera "${data.camera.name}" added – stream starting…`);
+    bootstrap.Modal.getInstance(document.getElementById('addCameraModal')).hide();
+    // Reload after short delay so the new card appears
+    setTimeout(() => location.reload(), 1500);
+  } else {
+    showAlert('danger', `❌ ${data.message}`);
+  }
+}
+
+/* ── toggle ───────────────────────────────────────────── */
+async function toggleCamera(camId, currentlyEnabled) {
+  const res  = await fetch(`/cameras/${camId}/toggle`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ enabled: !currentlyEnabled }),
+  });
+  const data = await res.json();
+  if (data.status === 'success') {
+    showAlert('success', data.message);
+    setTimeout(() => location.reload(), 800);
+  } else {
+    showAlert('danger', `❌ ${data.message}`);
+  }
+}
+
+/* ── delete ───────────────────────────────────────────── */
+async function deleteCamera(camId, camName) {
+  if (!confirm(`Remove camera "${camName}"?\nThe stream will stop and the record will be deleted.`))
+    return;
+
+  const res  = await fetch(`/cameras/${camId}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.status === 'success') {
+    document.getElementById(`card-${camId}`)?.remove();
+    showAlert('success', data.message);
+  } else {
+    showAlert('danger', `❌ ${data.message}`);
+  }
+}
+
+/* ── alert helper ─────────────────────────────────────── */
+function showAlert(type, msg) {
+  const area = document.getElementById('alertArea');
+  area.innerHTML =
+    `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+       ${msg}
+       <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+     </div>`;
+  setTimeout(() => area.innerHTML = '', 4000);
+}
+
+// Kick off polling on page load
+startPolling();
+</script>
+{% endblock %}
