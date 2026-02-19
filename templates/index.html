@@ -81,6 +81,12 @@
           <!-- Last manual override message will appear here -->
         </p>
 
+        <!-- ADD: Cooldown indicator -->
+        <div id="cooldown-box" class="alert alert-warning py-2 text-center mb-2 d-none">
+            <i class="bi bi-hourglass-split me-1"></i>
+            Gate locked — reopening in <strong id="cooldown-seconds">5</strong>s
+        </div>
+
         <button id="relay-toggle-btn" class="btn btn-outline-primary w-100">
           Toggle Gate (Supervisor Override)
         </button>

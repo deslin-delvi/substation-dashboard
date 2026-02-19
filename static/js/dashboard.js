@@ -86,6 +86,17 @@ function updateStatus() {
       if (lastUpdatedEl && data.last_updated) {
         lastUpdatedEl.textContent = data.last_updated;
       }
+
+      const cooldownBox = document.getElementById('cooldown-box');
+      const cooldownSec = document.getElementById('cooldown-seconds');
+      if (cooldownBox && cooldownSec) {
+        if (data.cooldown_active) {
+          cooldownBox.classList.remove('d-none');
+          cooldownSec.textContent = data.cooldown_remaining;
+        } else {
+          cooldownBox.classList.add('d-none');
+        }
+      }
     })
     .catch(err => {
       console.error('Error updating status:', err);

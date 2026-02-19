@@ -34,6 +34,10 @@ gate_state_lock = threading.Lock()
 relay_state = "CLOSED"
 override = False
 
+import time as time_module
+COOLDOWN_SECONDS = 5          # seconds gate stays closed after a violation
+gate_closed_at: float = 0.0  # timestamp of last auto-close
+
 # Primary USB camera YOLO processor (unchanged)
 yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0, flask_app=app)
 yolo.start()
@@ -95,19 +99,37 @@ def index():
 @app.route('/status')
 @login_required
 def status():
-    global relay_state, override
+    global relay_state, override, gate_closed_at
     with gate_state_lock:
         current = yolo.latest_status.copy()
         previous_relay_state = relay_state
+    
         if not override:
-            relay_state = "OPEN" if current.get("ppe_status") == "OK" else "CLOSED"
+            if current.get("ppe_status") == "OK":
+                # Only open if cooldown has fully elapsed
+                elapsed = time_module.time() - gate_closed_at
+                if elapsed >= COOLDOWN_SECONDS:
+                    relay_state = "OPEN"
+                # else: leave relay_state as CLOSED, cooldown still running
+            else:
+                # PPE not OK — close and record the timestamp
+                if relay_state != "CLOSED":
+                    gate_closed_at = time_module.time()
+                relay_state = "CLOSED"
+
         if previous_relay_state != relay_state:
             gate_controller.set_state(relay_state)
             yolo.update_gate_state(relay_state)
+
+        elapsed   = time_module.time() - gate_closed_at
+        remaining = max(0.0, COOLDOWN_SECONDS - elapsed)
+
         response_data = current.copy()
-        response_data["relay"]        = relay_state
-        response_data["override"]     = override
-        response_data['last_updated'] = datetime.now().strftime('%H:%M:%S')
+        response_data["relay"]              = relay_state
+        response_data["override"]           = override
+        response_data['last_updated']       = datetime.now().strftime('%H:%M:%S')
+        response_data['cooldown_active']    = remaining > 0 and not override
+        response_data['cooldown_remaining'] = round(remaining, 1)
     return jsonify(response_data)
 
 @app.route('/events')
