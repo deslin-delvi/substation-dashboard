@@ -1,7 +1,19 @@
 # hardware_controller.py
 """
 Hardware control for Raspberry Pi 4 + SG90 Servo Motor
-Supports both direct servo control and relay-based control
+Supports direct servo control (no relay needed for servo).
+
+LED Indicator via single-channel relay module:
+  - Relay OFF (NC) → RED  LED on  → Gate CLOSED
+  - Relay ON  (NO) → GREEN LED on → Gate OPEN
+
+Wiring:
+  Pi GPIO 17  →  Relay IN
+  Pi 5V       →  Relay VCC
+  Pi GND      →  Relay GND
+  Relay COM   →  GND
+  Relay NC    →  220Ω → RED   LED (+) → 5V
+  Relay NO    →  220Ω → GREEN LED (+) → 5V
 """
 
 import time
@@ -12,166 +24,231 @@ except ImportError:
     GPIO_AVAILABLE = False
     print("⚠️ RPi.GPIO not available - running in simulation mode")
 
+
+# ──────────────────────────────────────────────────────────────
+# LED Indicator via relay (NC = red/closed, NO = green/open)
+# ──────────────────────────────────────────────────────────────
+class LEDIndicator:
+    """
+    Uses one single-channel relay module to switch between
+    a RED LED (gate closed) and a GREEN LED (gate open).
+
+    Relay OFF → NC terminal active → RED LED lights up
+    Relay ON  → NO terminal active → GREEN LED lights up
+
+    Most relay modules are ACTIVE LOW:
+        GPIO LOW  (0V) → Relay energised (ON)  → GREEN
+        GPIO HIGH (3V) → Relay de-energised (OFF) → RED
+
+    If your relay module is active-high (less common), set
+    active_low=False when creating the object.
+    """
+
+    def __init__(self, relay_pin: int = 17, active_low: bool = True):
+        self.relay_pin  = relay_pin
+        self.active_low = active_low   # Most cheap relay boards are active-low
+
+        if not GPIO_AVAILABLE:
+            print("⚠️ [LED] Simulation mode — no GPIO")
+            return
+
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+        GPIO.setup(self.relay_pin, GPIO.OUT)
+
+        # Start with relay OFF → RED LED on (gate assumed closed)
+        self._relay_off()
+        print(f"✅ LEDIndicator ready on GPIO{relay_pin} "
+              f"({'active-low' if active_low else 'active-high'} relay)")
+
+    # ── public helpers ───────────────────────────────────────
+    def set_open(self):
+        """Energise relay → NO closes → GREEN LED on."""
+        if not GPIO_AVAILABLE:
+            print("[SIM] LED → GREEN (gate open)")
+            return
+        self._relay_on()
+        print("🟢 LED: GREEN (gate open)")
+
+    def set_closed(self):
+        """De-energise relay → NC closes → RED LED on."""
+        if not GPIO_AVAILABLE:
+            print("[SIM] LED → RED (gate closed)")
+            return
+        self._relay_off()
+        print("🔴 LED: RED (gate closed)")
+
+    def set_state(self, gate_state: str):
+        """Pass "OPEN" or "CLOSED" to update the LED."""
+        if gate_state == "OPEN":
+            self.set_open()
+        else:
+            self.set_closed()
+
+    def both_off(self):
+        """
+        De-energise relay on shutdown.
+        NC path stays connected → RED LED stays on,
+        which is the safe/closed default.
+        """
+        if not GPIO_AVAILABLE:
+            return
+        self._relay_off()
+
+    # ── internal relay helpers ────────────────────────────────
+    def _relay_on(self):
+        """Energise the relay coil."""
+        signal = GPIO.LOW if self.active_low else GPIO.HIGH
+        GPIO.output(self.relay_pin, signal)
+
+    def _relay_off(self):
+        """De-energise the relay coil."""
+        signal = GPIO.HIGH if self.active_low else GPIO.LOW
+        GPIO.output(self.relay_pin, signal)
+
+
+# ──────────────────────────────────────────────────────────────
+# Gate Controller  (direct servo + relay LED indicator)
+# ──────────────────────────────────────────────────────────────
 class GateController:
-    def __init__(self, mode='direct', servo_pin=18, relay_pin=17):
+    def __init__(self,
+                 mode='direct',
+                 servo_pin=18,
+                 relay_pin=23,
+                 led_active_low=True):
         """
-        Initialize gate controller
-        
+        Initialize gate controller.
+
         Args:
-            mode: 'direct' for direct servo control, 'relay' for relay+servo
-            servo_pin: GPIO pin for servo signal (BCM numbering)
-            relay_pin: GPIO pin for relay control (BCM numbering)
+            mode          : 'direct' — servo is driven directly by PWM (no relay for servo)
+            servo_pin     : GPIO BCM pin for servo PWM signal   (default 18)
+            relay_pin     : GPIO BCM pin for LED relay IN pin   (default 17)
+            led_active_low: True for most cheap relay modules (active-low trigger)
         """
-        self.mode = mode
+        self.mode      = mode
         self.servo_pin = servo_pin
         self.relay_pin = relay_pin
         self.current_state = "CLOSED"
-        
+
         if not GPIO_AVAILABLE:
-            print("⚠️ Running in SIMULATION mode (no actual GPIO control)")
+            print("⚠️ Running in SIMULATION mode")
+            self.led = LEDIndicator(relay_pin, led_active_low)
             return
-        
-        # Setup GPIO
+
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
-        
-        if mode == 'direct':
-            self._setup_direct_servo()
-        elif mode == 'relay':
-            self._setup_relay_servo()
-        else:
-            raise ValueError("Mode must be 'direct' or 'relay'")
-        
-        print(f"✅ Gate controller initialized in {mode.upper()} mode")
-        self.close_gate()  # Start with gate closed
-    
+
+        # Servo setup
+        self._setup_direct_servo()
+
+        # LED relay setup
+        self.led = LEDIndicator(relay_pin, led_active_low)
+
+        print(f"✅ GateController ready — servo GPIO{servo_pin}, LED relay GPIO{relay_pin}")
+
+        # Boot state: gate closed → RED LED
+        self.close_gate()
+
+    # ── servo setup ──────────────────────────────────────────
     def _setup_direct_servo(self):
-        """Setup for direct servo control (RECOMMENDED)"""
         GPIO.setup(self.servo_pin, GPIO.OUT)
-        
-        # Create PWM instance: 50Hz for SG90 servo
-        self.servo_pwm = GPIO.PWM(self.servo_pin, 50)
-        self.servo_pwm.start(0)  # Start with 0% duty cycle
-        print(f"✅ Direct servo control on GPIO {self.servo_pin}")
-    
-    def _setup_relay_servo(self):
-        """Setup for relay + servo control"""
-        # Relay control
-        GPIO.setup(self.relay_pin, GPIO.OUT)
-        GPIO.output(self.relay_pin, GPIO.LOW)  # Relay OFF initially
-        
-        # Servo signal control
-        GPIO.setup(self.servo_pin, GPIO.OUT)
-        self.servo_pwm = GPIO.PWM(self.servo_pin, 50)
+        self.servo_pwm = GPIO.PWM(self.servo_pin, 50)  # 50 Hz for SG90
         self.servo_pwm.start(0)
-        print(f"✅ Relay+Servo control on GPIO {self.relay_pin} (relay) & {self.servo_pin} (servo)")
-    
+        print(f"✅ Direct servo on GPIO{self.servo_pin}")
+
     def _set_servo_angle(self, angle):
         """
-        Set servo to specific angle (0-180 degrees)
-        
-        SG90 Servo specs:
-        - 0° = 2.5% duty cycle (0.5ms pulse)
-        - 90° = 7.5% duty cycle (1.5ms pulse)
-        - 180° = 12.5% duty cycle (2.5ms pulse)
+        Move servo to angle (0–180°).
+        SG90: 0° = 2.5%, 90° = 7.5%, 180° = 12.5% duty cycle
         """
         if not GPIO_AVAILABLE:
-            print(f"[SIM] Servo angle: {angle}°")
+            print(f"[SIM] Servo → {angle}°")
             return
-        
-        # Convert angle to duty cycle
-        duty_cycle = 2.5 + (angle / 180.0) * 10.0
-        
-        self.servo_pwm.ChangeDutyCycle(duty_cycle)
-        time.sleep(0.5)  # Wait for servo to reach position
-        self.servo_pwm.ChangeDutyCycle(0)  # Stop sending signal to prevent jitter
-    
+
+        duty = 2.5 + (angle / 180.0) * 10.0
+        self.servo_pwm.ChangeDutyCycle(duty)
+        time.sleep(0.5)
+        self.servo_pwm.ChangeDutyCycle(0)   # Stop signal to prevent jitter
+
+    # ── gate control ─────────────────────────────────────────
     def open_gate(self):
-        """Open the gate (servo to 90°)"""
+        """Servo → 90° and switch LED to GREEN."""
         if self.current_state == "OPEN":
             print("ℹ️ Gate already OPEN")
             return
-        
+
         print("🟢 Opening gate...")
-        
-        if self.mode == 'relay' and GPIO_AVAILABLE:
-            GPIO.output(self.relay_pin, GPIO.HIGH)  # Turn relay ON
-            time.sleep(0.1)  # Small delay for relay to activate
-        
-        self._set_servo_angle(90)  # Open position (adjust angle as needed)
+        self._set_servo_angle(90)
         self.current_state = "OPEN"
+        self.led.set_open()             # Relay ON → GREEN LED
         print("✅ Gate OPENED")
-    
+
     def close_gate(self):
-        """Close the gate (servo to 0°)"""
+        """Servo → 0° and switch LED to RED."""
         if self.current_state == "CLOSED":
             print("ℹ️ Gate already CLOSED")
             return
-        
+
         print("🔴 Closing gate...")
-        
-        self._set_servo_angle(0)  # Closed position (adjust angle as needed)
-        
-        if self.mode == 'relay' and GPIO_AVAILABLE:
-            time.sleep(0.1)
-            GPIO.output(self.relay_pin, GPIO.LOW)  # Turn relay OFF
-        
+        self._set_servo_angle(0)
         self.current_state = "CLOSED"
+        self.led.set_closed()           # Relay OFF → RED LED
         print("✅ Gate CLOSED")
-    
-    def set_state(self, state):
-        """Set gate state by string ("OPEN" or "CLOSED")"""
+
+    def set_state(self, state: str):
+        """Set gate by string: "OPEN" or "CLOSED"."""
         if state == "OPEN":
             self.open_gate()
         elif state == "CLOSED":
             self.close_gate()
         else:
-            print(f"⚠️ Invalid state: {state}")
-    
-    def get_state(self):
-        """Get current gate state"""
+            print(f"⚠️ Unknown state: {state}")
+
+    def get_state(self) -> str:
         return self.current_state
-    
+
     def cleanup(self):
-        """Cleanup GPIO resources"""
+        """Release GPIO on shutdown."""
         if not GPIO_AVAILABLE:
             return
-        
         print("🧹 Cleaning up GPIO...")
+        self.led.both_off()
         self.servo_pwm.stop()
         GPIO.cleanup()
-        print("✅ GPIO cleanup complete")
+        print("✅ GPIO cleanup done")
 
 
-# Test function
+# ──────────────────────────────────────────────────────────────
+# Quick test  (python hardware_controller.py)
+# ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("=== Gate Controller Test ===\n")
-    
-    # Create controller (change mode to 'relay' if using relay)
-    gate = GateController(mode='direct', servo_pin=18, relay_pin=17)
-    
+    print("=== Gate + LED Relay Test ===\n")
+
+    gate = GateController(
+        mode='direct',
+        servo_pin=18,       # Servo PWM pin
+        relay_pin=17,       # Relay IN pin (controls LEDs)
+        led_active_low=True # Most cheap relay boards need this
+    )
+
     try:
-        print("\n1. Testing gate movements...")
-        
-        # Open gate
-        gate.open_gate()
+        print("\nTesting gate + LED cycling...")
+
+        gate.open_gate()        # GREEN LED should light
         time.sleep(2)
-        
-        # Close gate
-        gate.close_gate()
+
+        gate.close_gate()       # RED LED should light
         time.sleep(2)
-        
-        # Open again
-        gate.open_gate()
+
+        gate.open_gate()        # GREEN
         time.sleep(2)
-        
-        # Close again
-        gate.close_gate()
-        
+
+        gate.close_gate()       # RED
+
         print("\n✅ Test complete!")
-        
+
     except KeyboardInterrupt:
-        print("\n⚠️ Test interrupted by user")
-    
+        print("\n⚠️ Interrupted")
+
     finally:
         gate.cleanup()
