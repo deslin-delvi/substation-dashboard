@@ -61,19 +61,31 @@
           </small>
         </div>
 
-        <div class="card-footer bg-transparent border-0 d-flex gap-2 pb-3 px-3">
-          <!-- Toggle -->
-          <button class="btn btn-sm {{ 'btn-outline-warning' if cam.enabled else 'btn-outline-success' }} flex-grow-1"
-                  onclick="toggleCamera({{ cam.id }}, {{ cam.enabled|lower }})">
-            <i class="bi {{ 'bi-pause-circle' if cam.enabled else 'bi-play-circle' }}"></i>
-            {{ 'Disable' if cam.enabled else 'Enable' }}
+        <!-- REPLACE the existing card-footer with this -->
+        <div class="card-footer bg-transparent border-0 pb-3 px-3">
+
+          <!-- Capture button — only shown when stream is enabled -->
+          {% if cam.enabled %}
+          <button class="btn btn-sm btn-danger w-100 mb-2 fw-semibold"
+                  onclick="captureViolation({{ cam.id }}, '{{ cam.name|e }}')"
+                  id="capture-btn-{{ cam.id }}">
+            <i class="bi bi-camera-fill me-1"></i> Capture Violation
           </button>
-          <!-- Delete -->
-          <button class="btn btn-sm btn-outline-danger"
-                  onclick="deleteCamera({{ cam.id }}, '{{ cam.name|e }}')">
-            <i class="bi bi-trash3"></i>
-          </button>
-        </div>
+          {% endif %}
+
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm {{ 'btn-outline-warning' if cam.enabled else 'btn-outline-success' }} flex-grow-1"
+                    onclick="toggleCamera({{ cam.id }}, {{ cam.enabled|lower }})">
+              <i class="bi {{ 'bi-pause-circle' if cam.enabled else 'bi-play-circle' }}"></i>
+              {{ 'Disable' if cam.enabled else 'Enable' }}
+            </button>
+            <button class="btn btn-sm btn-outline-danger"
+                    onclick="deleteCamera({{ cam.id }}, '{{ cam.name|e }}')">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </div>
+
+</div>
 
       </div>
     </div>
@@ -225,6 +237,41 @@ async function deleteCamera(camId, camName) {
     showAlert('success', data.message);
   } else {
     showAlert('danger', `❌ ${data.message}`);
+  }
+}
+
+async function captureViolation(camId, camName) {
+  const btn = document.getElementById(`capture-btn-${camId}`);
+
+  // Optional: ask for a note
+  const notes = prompt(
+    `Add a note for this capture from "${camName}" (optional):`, ''
+  );
+  if (notes === null) return;  // supervisor clicked Cancel
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Saving…';
+
+  const res  = await fetch(`/cameras/${camId}/capture`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ notes }),
+  });
+  const data = await res.json();
+
+  if (data.status === 'success') {
+    btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Captured!';
+    btn.classList.replace('btn-danger', 'btn-success');
+    showAlert('success', `📸 Snapshot saved from "${camName}" – check Violations log.`);
+    setTimeout(() => {
+      btn.innerHTML = '<i class="bi bi-camera-fill me-1"></i> Capture Violation';
+      btn.classList.replace('btn-success', 'btn-danger');
+      btn.disabled = false;
+    }, 2500);
+  } else {
+    showAlert('danger', `❌ ${data.message}`);
+    btn.innerHTML = '<i class="bi bi-camera-fill me-1"></i> Capture Violation';
+    btn.disabled = false;
   }
 }
 

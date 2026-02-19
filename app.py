@@ -413,6 +413,28 @@ def rtsp_video_feed(camera_id):
 
     return Response(generate(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
+@app.route('/cameras/<int:camera_id>/capture', methods=['POST'])
+@login_required
+def capture_cctv_violation(camera_id):
+    """Supervisor manually captures a violation snapshot from a CCTV stream."""
+    RTSPCamera.query.get_or_404(camera_id)
+    data  = request.get_json() or {}
+    notes = (data.get('notes') or '').strip()
+
+    filename, error = rtsp_manager.capture_violation(
+        camera_id    = camera_id,
+        supervisor_id = current_user.id,
+        notes        = notes,
+    )
+
+    if error:
+        return jsonify({'status': 'error', 'message': error}), 400
+
+    return jsonify({
+        'status':   'success',
+        'message':  'Violation captured and logged',
+        'image':    filename,
+    })
 
 # ─────────────────────────────────────────────────────────────
 # Entry point

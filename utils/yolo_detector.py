@@ -268,7 +268,7 @@ class YOLOProcessor:
                 continue
             
             # YOLO inference
-            results = self.model(frame, verbose=False, imgsz=320)[0]
+            results = self.model(frame, verbose=False, imgsz=320, conf=0.6, iou=0.6)[0]
             self._process_results(results)
             self._draw_boxes(frame, results)
             

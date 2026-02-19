@@ -100,12 +100,12 @@ class RTSPStream:
                     print(f"⚠️ Lost connection to {self.name}, reconnecting…")
                     self._connected = False
                     break
-
+                """"
                 frame_count += 1
                 if frame_count % 2 != 0:      # process every other frame
                     continue
-
-                results = self.model(frame, verbose=False, imgsz=320)[0]
+                """
+                results = self.model(frame, verbose=False, imgsz=320, conf=0.6, iou=0.6)[0]
                 self._process_results(results)
                 self._draw_boxes(frame, results)
 
@@ -166,16 +166,6 @@ class RTSPStream:
         else:
             new_status = "UNKNOWN"
 
-        # ── Fire violation on transition into NOT_OK ─────────
-        if new_status == "NOT_OK" and self.prev_status != "NOT_OK":
-            elapsed = time.time() - self._start_time
-            if elapsed >= self.STARTUP_GRACE:
-                missing = []
-                if no_helmet: missing.append("helmet")
-                if no_gloves: missing.append("gloves")
-                if no_boots:  missing.append("boots")
-                self._log_violation(missing)
-
         self.prev_status = new_status
         self.latest_status.update({
             "ppe_status":   new_status,
@@ -207,51 +197,63 @@ class RTSPStream:
             cv2.putText(frame, label, (x1, y1 - 5),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    def _log_violation(self, missing_items: list):
-        """Save violation image + DB record (mirrors yolo_detector behaviour)."""
-        if not self.flask_app:
-            return
+    def capture_violation(self, supervisor_id, notes=""):
+        """
+        Called manually by supervisor via the dashboard button.
+        Reads current frame + PPE status at time of click.
+        """
+        missing_items = []
+        if self.latest_status.get('no_helmet'): missing_items.append('helmet')
+        if self.latest_status.get('no_gloves'): missing_items.append('gloves')
+        if self.latest_status.get('no_boots'):  missing_items.append('boots')
 
-        timestamp    = datetime.now()
-        ts_str       = timestamp.strftime("%Y%m%d_%H%M%S")
+        ppe_status = self.latest_status.get('ppe_status', 'UNKNOWN')
+
+        import os, numpy as np
+        timestamp  = datetime.now()
+        ts_str     = timestamp.strftime("%Y%m%d_%H%M%S")
         image_filename = f"rtsp_{self.camera_id}_{ts_str}.jpg"
-
-        # ── Save image ───────────────────────────────────────
         saved = False
+
         if isinstance(self.latest_frame, bytes) and len(self.latest_frame) > 0:
             try:
                 os.makedirs(self.violations_dir, exist_ok=True)
-                full_path = os.path.join(self.violations_dir, image_filename)
-                nparr     = np.frombuffer(self.latest_frame, np.uint8)
-                frame_np  = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                nparr    = np.frombuffer(self.latest_frame, np.uint8)
+                frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 if frame_np is not None:
-                    saved = cv2.imwrite(full_path, frame_np)
+                    saved = cv2.imwrite(
+                        os.path.join(self.violations_dir, image_filename), frame_np
+                    )
             except Exception as e:
-                print(f"❌ Error saving RTSP violation image: {e}")
+                print(f"❌ Error saving snapshot: {e}")
 
         if not saved:
             image_filename = None
 
-        # ── Save DB record ───────────────────────────────────
+        # Save to DB
         try:
             with self.flask_app.app_context():
                 record = Violation(
                     timestamp      = timestamp,
-                    violation_type = "rtsp_auto_detected",
-                    missing_items  = ", ".join(missing_items),
+                    violation_type = "rtsp_manual_capture",
+                    missing_items  = ", ".join(missing_items) if missing_items else "N/A",
                     image_path     = image_filename,
-                    gate_action    = "N/A",   # RTSP cameras don't control the gate
-                    operator_id    = None,
+                    gate_action    = "N/A",
+                    operator_id    = supervisor_id,
                     notes          = (
-                        f"[CCTV:{self.name}] PPE violation detected – "
-                        f"missing: {', '.join(missing_items)}"
+                        notes or
+                        f"[CCTV:{self.name}] Manual capture by supervisor. "
+                        f"PPE status: {ppe_status}"
+                        + (f" – missing: {', '.join(missing_items)}" if missing_items else "")
                     ),
                 )
                 db.session.add(record)
                 db.session.commit()
-                print(f"📸 RTSP violation logged: {self.name} – {missing_items}")
+                print(f"📸 Manual CCTV capture logged: {self.name}")
+                return image_filename
         except Exception as e:
-            print(f"❌ Error saving RTSP violation to DB: {e}")
+            print(f"❌ DB error: {e}")
+            return None
 
 
 # ─────────────────────────────────────────────────────────────
@@ -341,3 +343,12 @@ class RTSPManager:
         )
         stream.start()
         self._streams[camera_id] = stream
+
+    # Add to RTSPManager class
+    def capture_violation(self, camera_id: int, supervisor_id: int, notes: str = ""):
+        """Called from the route when supervisor clicks Capture."""
+        stream = self._streams.get(camera_id)
+        if not stream:
+            return None, "Stream not active"
+        filename = stream.capture_violation(supervisor_id, notes)
+        return filename, None
