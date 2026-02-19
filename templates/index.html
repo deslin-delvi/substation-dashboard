@@ -4,16 +4,16 @@
 <div class="row g-4">
   <!-- Left Column: Video Feed -->
   <div class="col-12 col-lg-8">
-    <div class="card shadow-sm h-100">
+    <div class="card shadow-sm">
       <div class="card-header bg-primary text-white">
         <i class="bi bi-camera-video"></i> Live Video Feed
       </div>
       <div class="card-body p-0 bg-dark">
-        <div class="video-container">
+      <div class="video-container" style="height:auto !important; line-height:0;">
           <img src="{{ url_for('video_feed') }}"
-               alt="Video Feed"
-               class="img-fluid w-100"
-               id="video-feed">
+              alt="Video Feed"
+              id="video-feed"
+              style="display:block; width:100%; height:auto;">
           <div class="video-overlay">
             <span class="badge bg-danger pulse">DETECTION ACTIVE</span>
           </div>
