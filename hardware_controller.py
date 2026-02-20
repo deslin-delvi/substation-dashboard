@@ -54,7 +54,7 @@ class LEDIndicator:
 
         GPIO.setmode(GPIO.BCM)
         GPIO.setwarnings(False)
-        GPIO.setup(self.relay_pin, GPIO.OUT)
+        GPIO.setup(self.relay_pin, GPIO.OUT, initial=GPIO.HIGH)  # HIGH = relay OFF for active-low
 
         # Start with relay OFF → RED LED on (gate assumed closed)
         self._relay_off()
@@ -115,7 +115,7 @@ class GateController:
                  mode='direct',
                  servo_pin=18,
                  relay_pin=23,
-                 led_active_low=True):
+                 led_active_low=True):  # active-low = GPIO HIGH turns relay OFF
         """
         Initialize gate controller.
 
@@ -146,8 +146,10 @@ class GateController:
 
         print(f"✅ GateController ready — servo GPIO{servo_pin}, LED relay GPIO{relay_pin}")
 
-        # Boot state: gate closed → RED LED
-        self.close_gate()
+        # Directly set LED to closed at boot.
+        # We can't call close_gate() here because current_state starts as "CLOSED"
+        # which triggers the early-return guard and skips the LED update entirely.
+        self.led.set_closed()
 
     # ── servo setup ──────────────────────────────────────────
     def _setup_direct_servo(self):
@@ -178,7 +180,7 @@ class GateController:
             return
 
         print("🟢 Opening gate...")
-        self._set_servo_angle(90)
+        self._set_servo_angle(135)
         self.current_state = "OPEN"
         self.led.set_open()             # Relay ON → GREEN LED
         print("✅ Gate OPENED")
@@ -190,7 +192,7 @@ class GateController:
             return
 
         print("🔴 Closing gate...")
-        self._set_servo_angle(0)
+        self._set_servo_angle(45)
         self.current_state = "CLOSED"
         self.led.set_closed()           # Relay OFF → RED LED
         print("✅ Gate CLOSED")

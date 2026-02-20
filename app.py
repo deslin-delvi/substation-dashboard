@@ -29,7 +29,7 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 # Hardware controller (unchanged)
-gate_controller = GateController(mode='direct', servo_pin=18, relay_pin=23, led_active_low=True)
+gate_controller = GateController(mode='direct', servo_pin=18, relay_pin=23, led_active_low=False)
 gate_state_lock = threading.Lock()
 relay_state = "CLOSED"
 override = False
