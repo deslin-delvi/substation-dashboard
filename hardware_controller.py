@@ -156,21 +156,47 @@ class GateController:
         GPIO.setup(self.servo_pin, GPIO.OUT)
         self.servo_pwm = GPIO.PWM(self.servo_pin, 50)  # 50 Hz for SG90
         self.servo_pwm.start(0)
+        self._current_angle = 45  # Start assumption matches closed position
         print(f"✅ Direct servo on GPIO{self.servo_pin}")
 
-    def _set_servo_angle(self, angle):
+    #for speed adjustment of servo
+    def _angle_to_duty(self, angle):
+        """Convert angle (0–180°) to SG90 duty cycle (2.5–12.5%)."""
+        return 2.5 + (angle / 180.0) * 10.0
+
+    def _set_servo_angle(self, target_angle, step=3, step_delay=0.02):
         """
-        Move servo to angle (0–180°).
-        SG90: 0° = 2.5%, 90° = 7.5%, 180° = 12.5% duty cycle
+        Move servo to target angle in small steps to prevent
+        overshoot and undershoot caused by software PWM inconsistency.
+
+        Args:
+            target_angle: destination angle in degrees
+            step        : degrees per step (smaller = smoother, slower)
+            step_delay  : seconds between steps
         """
         if not GPIO_AVAILABLE:
-            print(f"[SIM] Servo → {angle}°")
+            print(f"[SIM] Servo → {target_angle}°")
             return
 
-        duty = 2.5 + (angle / 180.0) * 10.0
-        self.servo_pwm.ChangeDutyCycle(duty)
-        time.sleep(0.5)
-        self.servo_pwm.ChangeDutyCycle(0)   # Stop signal to prevent jitter
+        current_angle = self._current_angle
+
+        # Determine direction
+        if current_angle < target_angle:
+            angles = range(int(current_angle), int(target_angle) + 1, step)
+        else:
+            angles = range(int(current_angle), int(target_angle) - 1, -step)
+
+        for angle in angles:
+            duty = self._angle_to_duty(angle)
+            self.servo_pwm.ChangeDutyCycle(duty)
+            time.sleep(step_delay)
+
+        # Final correction — ensure we land exactly on target
+        self.servo_pwm.ChangeDutyCycle(self._angle_to_duty(target_angle))
+        time.sleep(0.3)
+        self.servo_pwm.ChangeDutyCycle(0)  # Stop signal to prevent jitter
+
+        self._current_angle = target_angle
 
     # ── gate control ─────────────────────────────────────────
     def open_gate(self):
