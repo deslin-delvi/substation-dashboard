@@ -100,24 +100,24 @@ class RTSPStream:
                     print(f"⚠️ Lost connection to {self.name}, reconnecting…")
                     self._connected = False
                     break
-                """"
+                
                 frame_count += 1
-                if frame_count % 2 != 0:      # process every other frame
+                if frame_count % 4 != 0:      # process every other frame
                     continue
-                """
+                
                 results = self.model(frame, verbose=False, imgsz=320, conf=0.6, iou=0.6)[0]
                 self._process_results(results)
                 self._draw_boxes(frame, results)
 
+		
                 curr_time  = time.time()
                 self.fps   = round(1 / max(curr_time - prev_time, 1e-6), 1)
                 prev_time  = curr_time
 
-                # Overlay: camera name + fps
-                cv2.putText(frame, f"{self.name} | FPS:{self.fps}",
-                            (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
-                            0.8, (0, 255, 0), 2)
-
+                # Overlay: camera name + fps (disabled)
+                # cv2.putText(frame, f"{self.name} | FPS:{self.fps}",
+                #             (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
+                #             0.8, (0, 255, 0), 2)
                 ret, jpeg = cv2.imencode(".jpg", frame)
                 if ret:
                     self.latest_frame = jpeg.tobytes()
@@ -133,7 +133,7 @@ class RTSPStream:
         try:
             cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
             # Lower buffer to reduce latency
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 

@@ -4,12 +4,12 @@
 <div class="row g-4">
   <!-- Left Column: Video Feed -->
   <div class="col-12 col-lg-8">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm" style="overflow: visible;">
       <div class="card-header bg-primary text-white">
         <i class="bi bi-camera-video"></i> Live Video Feed
       </div>
-      <div class="card-body p-0 bg-dark">
-      <div class="video-container" style="height:auto !important; line-height:0;">
+      <div class="card-body p-0 bg-dark" style="overflow: visible; border-radius: 0 0 0.375rem 0.375rem;">
+      <div class="video-container" style="line-height:0; border-radius: 0 0 0.375rem 0.375rem; overflow: hidden;">
           <img src="{{ url_for('video_feed') }}"
               alt="Video Feed"
               id="video-feed"

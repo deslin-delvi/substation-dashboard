@@ -10,6 +10,8 @@ import numpy as np
 import atexit
 import threading
 
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+
 # Local imports
 from utils.yolo_detector import YOLOProcessor
 from utils.rtsp_processor import RTSPManager          # 📡 NEW

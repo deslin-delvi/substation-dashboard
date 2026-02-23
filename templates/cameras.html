@@ -26,14 +26,14 @@
       <div class="card h-100 shadow-sm border-0">
 
         <!-- Live feed -->
-        <div class="position-relative bg-dark" style="height:220px; overflow:hidden; border-radius:.5rem .5rem 0 0;">
+        <div class="position-relative bg-dark" style="overflow:hidden; border-radius:.5rem .5rem 0 0; line-height:0;">
           {% if cam.enabled %}
           <img src="{{ url_for('rtsp_video_feed', camera_id=cam.id) }}"
-               class="w-100 h-100" style="object-fit:cover;"
+               class="w-100" style="display:block; height:auto;"
                onerror="this.src='/static/img/no-signal.png'">
           {% else %}
-          <div class="d-flex align-items-center justify-content-center h-100">
-            <span class="text-secondary"><i class="bi bi-camera-video-off fs-1"></i><br>Stream disabled</span>
+          <div class="d-flex align-items-center justify-content-center" style="height:180px;">
+            <span class="text-secondary text-center"><i class="bi bi-camera-video-off fs-1"></i><br>Stream disabled</span>
           </div>
           {% endif %}
 

@@ -262,11 +262,11 @@ class YOLOProcessor:
             if not ok:
                 time.sleep(0.05)
                 continue
-            
+            """
             frame_count += 1
             if frame_count % 2 != 0:  # Process every 2nd frame
                 continue
-            
+            """
             # YOLO inference
             results = self.model(frame, verbose=False, imgsz=320, conf=0.6, iou=0.6)[0]
             self._process_results(results)

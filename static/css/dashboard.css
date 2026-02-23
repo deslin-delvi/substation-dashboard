@@ -15,6 +15,7 @@ body {
     background: #000;
     width: 100%;
     overflow: hidden;
+    line-height: 0;
 }
 
 #video-feed {
@@ -164,9 +165,7 @@ body {
 
 /* Responsive */
 @media (max-width: 992px) {
-    .video-container {
-        min-height: 300px;
-    }
+    /* video-container height is left to the stream's natural aspect ratio */
 }
 
 /* ========================================
@@ -178,10 +177,7 @@ body {
     .navbar-brand {
         font-size: 1rem !important;
     }
-    
-    .video-container {
-        min-height: 300px;
-    }
+    /* No min-height on video-container — let the stream dictate its own height */
 }
 
 /* Mobile phones (≤768px) */
@@ -226,11 +222,7 @@ body {
         padding: 10px 12px;
     }
     
-    /* Video adjustments */
-    .video-container {
-        min-height: 250px;
-    }
-    
+    /* Video — no forced min-height; stream dictates its own height */
     .video-overlay .badge {
         font-size: 0.75rem;
         padding: 0.35rem 0.65rem;
