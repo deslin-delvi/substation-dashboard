@@ -115,7 +115,7 @@ class GateController:
                  mode='direct',
                  servo_pin=18,
                  relay_pin=23,
-                 led_active_low=True):  # active-low = GPIO HIGH turns relay OFF
+                 led_active_low=True):
         """
         Initialize gate controller.
 
