@@ -181,7 +181,7 @@ class YOLOProcessor:
         # Determine status
         if has_violation:
             new_status = "NOT_OK"
-        elif helmet and gloves and boots:
+        elif helmet and boots:
             new_status = "OK"
         else:
             # No positive OR negative detections = just background/empty frame
@@ -264,7 +264,7 @@ class YOLOProcessor:
                 continue
             """
             frame_count += 1
-            if frame_count % 2 != 0:  # Process every 2nd frame
+            if frame_count % 3 != 0:  # Process every 2nd frame
                 continue
             """
             # YOLO inference
