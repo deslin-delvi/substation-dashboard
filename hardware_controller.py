@@ -199,7 +199,7 @@ class GateController:
         self._current_angle = 45
 
     # ── pulse width helpers (pigpio) ─────────────────────────────────────────
-    def _set_pulsewidth(self, target_pw, step=20, step_delay=0.018):
+    def _set_pulsewidth(self, target_pw, step=35, step_delay=0.014):
         """
         Smoothly move servo to target pulse width (µs).
         step      : µs per step — smaller = smoother, slower

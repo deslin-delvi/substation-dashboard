@@ -102,7 +102,7 @@ class RTSPStream:
                     break
                 
                 frame_count += 1
-                if frame_count % 4 != 0:      # process every other frame
+                if frame_count % 3 != 0:      # process every other frame
                     continue
                 
                 results = self.model(frame, verbose=False, imgsz=320, conf=0.6, iou=0.6)[0]
@@ -110,12 +110,12 @@ class RTSPStream:
                 self._draw_boxes(frame, results)
 
 		
-                curr_time  = time.time()
-                self.fps   = round(1 / max(curr_time - prev_time, 1e-6), 1)
-                prev_time  = curr_time
+                #curr_time  = time.time()
+                #self.fps   = round(1 / max(curr_time - prev_time, 1e-6), 1)
+                #prev_time  = curr_time
 
                 # Overlay: camera name + fps (disabled)
-                # cv2.putText(frame, f"{self.name} | FPS:{self.fps}",
+                #cv2.putText(frame, f"{self.name} | FPS:{self.fps}",
                 #             (10, 30), cv2.FONT_HERSHEY_SIMPLEX,
                 #             0.8, (0, 255, 0), 2)
                 ret, jpeg = cv2.imencode(".jpg", frame)
@@ -275,6 +275,13 @@ class RTSPManager:
         print("🔄 Loading YOLO model for RTSP manager…")
         self.model = YOLO(model_path)
         print("✅ RTSP YOLO model loaded")
+
+        """✅ Warm-up: force model fuse ONCE before any threads start
+        This prevents the race condition where multiple threads
+        all try to fuse the model simultaneously on first inference"""
+        dummy = np.zeros((320, 320, 3), dtype=np.uint8)
+        self.model(dummy, verbose=False, imgsz=320)
+        print("✅ RTSP YOLO model loaded and warmed up")
 
     # ── lifecycle ────────────────────────────────────────────
     def load_from_db(self):
