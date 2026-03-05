@@ -212,6 +212,13 @@ def control_relay():
     db.session.add(violation)
     db.session.commit()
 
+    # 🔌 WebSocket: push manual override state
+    socketio.emit('override_update', {
+        "override": True,
+        "relay": relay_state,
+        "message": msg
+    })
+
     return jsonify({
         "relay":          relay_state,
         "override":       override,
@@ -224,10 +231,24 @@ def control_relay():
 @app.route("/control/auto", methods=["POST"])
 @login_required
 def clear_override():
-    global override
+    global override, relay_state, gate_closed_at
     with gate_state_lock:
-        override  = False
+        override   = False
         ppe_status = yolo.latest_status.copy()
+
+        # Immediately recalculate gate state based on current PPE
+        if ppe_status.get('ppe_status') == 'OK':
+            elapsed = time_module.time() - gate_closed_at
+            if elapsed >= COOLDOWN_SECONDS:
+                relay_state = 'OPEN'
+            else:
+                relay_state = 'CLOSED'
+        else:
+            # PPE violation active — close gate immediately
+            if relay_state != 'CLOSED':
+                gate_closed_at = time_module.time()
+            relay_state = 'CLOSED'
+            gate_controller.set_state('CLOSED')
 
     has_violation = ppe_status.get('has_violation', False)
     violations    = [x for x in ('helmet', 'gloves', 'boots')
@@ -262,6 +283,23 @@ def clear_override():
         )
     db.session.add(violation)
     db.session.commit()
+
+    # 🔌 WebSocket: push override state change + force status refresh
+    elapsed   = time_module.time() - gate_closed_at
+    remaining = max(0.0, COOLDOWN_SECONDS - elapsed)
+
+    socketio.emit('override_update', {
+        "override":          False,
+        "relay":             relay_state,
+        "message":           "Automatic PPE control restored",
+        "cooldown_active":   remaining > 0,
+        "cooldown_remaining": round(remaining, 1)
+    })
+    socketio.emit('ppe_update', {
+        **yolo.latest_status,
+        "relay": relay_state,
+        "last_updated": datetime.now().strftime('%H:%M:%S')
+    })
 
     return jsonify({
         "override":           False,
