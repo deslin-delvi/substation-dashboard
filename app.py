@@ -45,7 +45,7 @@ COOLDOWN_SECONDS = 5          # seconds gate stays closed after a violation
 gate_closed_at: float = 0.0  # timestamp of last auto-close
 
 # Primary USB camera YOLO processor (unchanged)
-yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0, flask_app=app)
+yolo = YOLOProcessor(model_path="models/best.pt", camera_index=0, flask_app=app, socketio=socketio)
 yolo.start()
 
 # 📡 NEW: RTSP multi-camera manager

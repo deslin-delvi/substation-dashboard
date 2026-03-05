@@ -15,10 +15,11 @@ except ImportError:
     print("⚠️ Database not available - running in mock mode")
 
 class YOLOProcessor:
-    def __init__(self, model_path="models/best.pt", camera_index=0, flask_app=None):
+    def __init__(self, model_path="models/best.pt", camera_index=0, flask_app=None, socketio=None):
         # Load model
         self.model = YOLO(model_path)
         self.flask_app = flask_app
+        self.socketio = socketio
 
         # Events + status tracking
         self.events = []
@@ -153,7 +154,14 @@ class YOLOProcessor:
                 print(f"✅ Gate opened - PPE complete, no violation to capture")
             
             self.prev_gate_state = new_gate_state
-        
+
+            # 🔌 WebSocket: push gate state change instantly
+            if self.socketio:
+                self.socketio.emit('gate_update', {
+                    "relay": new_gate_state,
+                    "last_updated": datetime.now().strftime('%H:%M:%S')
+                })
+
         self.current_gate_state = new_gate_state
 
     def _process_results(self, results):
@@ -198,19 +206,49 @@ class YOLOProcessor:
                 
                 ts = datetime.now().strftime("%H:%M:%S")
                 msg = f"PPE VIOLATION detected: {', '.join(missing)}"
-                self.events.append({"time": ts, "type": "danger", "message": msg})
+                event = {"time": ts, "type": "danger", "message": msg}
+                self.events.append(event)
                 print(f"⚠️ PPE Status: NOT_OK (violations: {missing})")
-        
+
+                # 🔌 WebSocket: push violation alert instantly
+                if self.socketio:
+                    self.socketio.emit('new_event', event)
+
         elif new_status == "OK" and self.prev_status == "NOT_OK":
             ts = datetime.now().strftime("%H:%M:%S")
-            self.events.append({"time": ts, "type": "success", "message": "All PPE detected"})
+            event = {"time": ts, "type": "success", "message": "All PPE detected"}
+            self.events.append(event)
             print(f"✅ PPE Status: OK")
-        
+
+            # 🔌 WebSocket: push cleared status instantly
+            if self.socketio:
+                self.socketio.emit('new_event', event)
+
         elif new_status == "UNKNOWN" and self.prev_status == "NOT_OK":
             ts = datetime.now().strftime("%H:%M:%S")
-            self.events.append({"time": ts, "type": "info", "message": "No person detected"})
+            event = {"time": ts, "type": "info", "message": "No person detected"}
+            self.events.append(event)
             print(f"ℹ️ PPE Status: UNKNOWN (no person in frame)")
-        
+
+            # 🔌 WebSocket: push unknown status instantly
+            if self.socketio:
+                self.socketio.emit('new_event', event)
+
+        # 🔌 WebSocket: push full PPE status on every change
+        if new_status != self.prev_status:
+            if self.socketio:
+                self.socketio.emit('ppe_update', {
+                    "ppe_status":  new_status,
+                    "helmet":      helmet,
+                    "gloves":      gloves,
+                    "boots":       boots,
+                    "no_helmet":   no_helmet,
+                    "no_gloves":   no_gloves,
+                    "no_boots":    no_boots,
+                    "has_violation": has_violation,
+                    "last_updated": datetime.now().strftime('%H:%M:%S')
+                })
+
         self.prev_status = new_status
         
         # 🔧 NEW: Store negative detections for violation tracking
