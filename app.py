@@ -50,8 +50,7 @@ yolo.start()
 
 # 📡 NEW: RTSP multi-camera manager
 # Streams are loaded from the DB after db.create_all() in __main__
-rtsp_manager = RTSPManager(model_path="models/best.pt", flask_app=app)
-
+rtsp_manager = RTSPManager(model_path="models/best.pt", flask_app=app, socketio=socketio)
 def cleanup_on_exit():
     print("\n🛑 Shutting down…")
     yolo.stop()

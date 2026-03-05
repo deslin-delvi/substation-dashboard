@@ -37,13 +37,14 @@ class RTSPStream:
     STARTUP_GRACE      = 5.0  # seconds to suppress logging after (re)connect
 
     def __init__(self, camera_id: int, name: str, url: str,
-                 model: YOLO, flask_app, violations_dir: str):
+                 model: YOLO, flask_app, violations_dir: str, socketio=None):
         self.camera_id      = camera_id
         self.name           = name
         self.url            = url
         self.model          = model
         self.flask_app      = flask_app
         self.violations_dir = violations_dir
+        self.socketio       = socketio
 
         self.latest_frame: bytes | None = None
         self.latest_status = {
@@ -166,6 +167,23 @@ class RTSPStream:
         else:
             new_status = "UNKNOWN"
 
+        # 🔌 WebSocket: push RTSP camera status when it changes
+        if new_status != self.prev_status:
+            if self.socketio:
+                self.socketio.emit('rtsp_status_update', {
+                    "camera_id":    self.camera_id,
+                    "camera_name":  self.name,
+                    "ppe_status":   new_status,
+                    "helmet":       helmet,
+                    "gloves":       gloves,
+                    "boots":        boots,
+                    "no_helmet":    no_helmet,
+                    "no_gloves":    no_gloves,
+                    "no_boots":     no_boots,
+                    "has_violation": has_violation,
+                    "last_updated": datetime.now().strftime('%H:%M:%S')
+                })
+
         self.prev_status = new_status
         self.latest_status.update({
             "ppe_status":   new_status,
@@ -250,6 +268,18 @@ class RTSPStream:
                 db.session.add(record)
                 db.session.commit()
                 print(f"📸 Manual CCTV capture logged: {self.name}")
+
+                # 🔌 WebSocket: notify dashboard of new RTSP violation
+                if self.socketio:
+                    self.socketio.emit('rtsp_violation', {
+                        "camera_id":   self.camera_id,
+                        "camera_name": self.name,
+                        "ppe_status":  ppe_status,
+                        "missing":     missing_items,
+                        "image":       image_filename,
+                        "time":        datetime.now().strftime('%H:%M:%S')
+                    })
+
                 return image_filename
         except Exception as e:
             print(f"❌ DB error: {e}")
@@ -266,10 +296,11 @@ class RTSPManager:
     per-camera helpers from routes.
     """
 
-    def __init__(self, model_path: str, flask_app):
+    def __init__(self, model_path: str, flask_app, socketio=None):
         self.flask_app      = flask_app
+        self.socketio       = socketio
         self.violations_dir = os.path.join(flask_app.root_path, "static", "violations")
-        self._streams: dict[int, RTSPStream] = {}   # camera_id → RTSPStream
+        self._streams: dict[int, RTSPStream] = {}
 
         # Share one YOLO model across all RTSP streams (memory-efficient)
         print("🔄 Loading YOLO model for RTSP manager…")
@@ -347,6 +378,7 @@ class RTSPManager:
             model          = self.model,
             flask_app      = self.flask_app,
             violations_dir = self.violations_dir,
+            socketio       = self.socketio,
         )
         stream.start()
         self._streams[camera_id] = stream
