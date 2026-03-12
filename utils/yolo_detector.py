@@ -193,12 +193,12 @@ class YOLOProcessor:
         
         # 🔧 CRITICAL: Only mark as NOT_OK if negative classes are detected
         # This means there's actually a person without proper PPE
-        has_violation = no_helmet #or no_gloves or no_boots
+        has_violation = no_helmet or no_boots#or no_gloves or no_boots
         
         # Determine status
         if has_violation:
             new_status = "NOT_OK"
-        elif helmet:               #NEED TO ADD GLOVES AND BOOTS
+        elif helmet and boots:               #NEED TO ADD GLOVES AND BOOTS
             new_status = "OK"
         else:
             # No positive OR negative detections = just background/empty frame
