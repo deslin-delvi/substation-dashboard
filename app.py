@@ -224,7 +224,8 @@ def control_relay():
 
     # Only capture violation when gate is OPENED (CLOSED→OPEN).
     # Closing the gate is inherently safe — no violation to log.
-    image_filename = None
+    image_filename      = None
+    violations_detected = []
     if gate_action == "MANUAL_OPEN":
         violation_timestamp = datetime.now()
         timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
