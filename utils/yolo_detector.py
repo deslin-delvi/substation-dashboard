@@ -54,6 +54,7 @@ class YOLOProcessor:
         self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
         self.latest_frame = None  # JPEG bytes
+        self._frame_lock = threading.Lock()  # protects raw_frame access
         self.latest_status = {
             "ppe_status": "UNKNOWN",
             "helmet": False,
@@ -321,7 +322,8 @@ class YOLOProcessor:
             while self.running:
                 ok, frame = self.cap.read()
                 if ok:
-                    self.raw_frame = frame
+                    with self._frame_lock:
+                        self.raw_frame = frame
                 else:
                     time.sleep(0.05)
 
@@ -332,11 +334,13 @@ class YOLOProcessor:
         prev_time = time.time()
 
         while self.running:
-            if self.raw_frame is None:
+            with self._frame_lock:
+                raw = self.raw_frame
+            if raw is None:
                 time.sleep(0.01)
                 continue
 
-            frame = self.raw_frame.copy()
+            frame = raw.copy()
             results = self.model(frame, verbose=False, imgsz=320, conf=0.5, iou=0.5)[0]
 
             # Temporal stability filter

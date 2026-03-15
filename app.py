@@ -182,27 +182,10 @@ def index():
 @app.route('/status')
 @login_required
 def status():
-    global relay_state, override, gate_closed_at
+    # Gate logic is handled by gate_control_loop (every 100ms).
+    # This route only reads and returns current state.
     with gate_state_lock:
         current = yolo.latest_status.copy()
-        previous_relay_state = relay_state
-    
-        if not override:
-            if current.get("ppe_status") == "OK":
-                # Only open if cooldown has fully elapsed
-                elapsed = time_module.time() - gate_closed_at
-                if elapsed >= COOLDOWN_SECONDS:
-                    relay_state = "OPEN"
-                # else: leave relay_state as CLOSED, cooldown still running
-            else:
-                # PPE not OK — close and record the timestamp
-                if relay_state != "CLOSED":
-                    gate_closed_at = time_module.time()
-                relay_state = "CLOSED"
-
-        if previous_relay_state != relay_state:
-            gate_controller.set_state(relay_state)
-            yolo.update_gate_state(relay_state)
 
         elapsed   = time_module.time() - gate_closed_at
         remaining = max(0.0, COOLDOWN_SECONDS - elapsed)
@@ -226,10 +209,26 @@ def control_relay():
     global relay_state, override
     with gate_state_lock:
         override = True
+
+        if relay_state == "OPEN":
+            relay_state = "CLOSED"
+            msg         = "Manual override: gate CLOSED by supervisor"
+            gate_action = "MANUAL_CLOSE"
+        else:
+            relay_state = "OPEN"
+            msg         = "Manual override: gate OPENED by supervisor"
+            gate_action = "MANUAL_OPEN"
+
+        gate_controller.set_state(relay_state)
+        ppe_status = yolo.latest_status.copy()
+
+    # Only capture violation when gate is OPENED (CLOSED→OPEN).
+    # Closing the gate is inherently safe — no violation to log.
+    image_filename = None
+    if gate_action == "MANUAL_OPEN":
         violation_timestamp = datetime.now()
         timestamp_str = violation_timestamp.strftime("%Y%m%d_%H%M%S")
-        current_frame  = yolo.latest_frame
-        image_filename = None
+        current_frame = yolo.latest_frame
         if current_frame and isinstance(current_frame, bytes):
             try:
                 nparr    = np.frombuffer(current_frame, np.uint8)
@@ -245,50 +244,38 @@ def control_relay():
                 print(f"❌ Error capturing override photo: {e}")
                 image_filename = None
 
-        if relay_state == "OPEN":
-            relay_state = "CLOSED"
-            msg         = "Manual override: gate CLOSED by supervisor"
-            gate_action = "MANUAL_CLOSE"
+        violations_detected = []
+        if ppe_status.get('no_helmet'): violations_detected.append('no-helmet')
+        if ppe_status.get('no_gloves'): violations_detected.append('no-gloves')
+        if ppe_status.get('no_boots'):  violations_detected.append('no-boots')
+
+        missing_items = (
+            [v.replace('no-', '') for v in violations_detected]
+            if violations_detected
+            else [x for x in ('helmet', 'gloves', 'boots') if not ppe_status.get(x)]
+        )
+
+        has_violation = ppe_status.get('has_violation', False)
+        ppe_state     = ppe_status.get('ppe_status', 'UNKNOWN')
+
+        if has_violation:
+            ppe_description = f"VIOLATION DETECTED: {', '.join(violations_detected)}"
+        elif ppe_state == "OK":
+            ppe_description = "COMPLETE PPE"
         else:
-            relay_state = "OPEN"
-            msg         = "Manual override: gate OPENED by supervisor"
-            gate_action = "MANUAL_OPEN"
+            ppe_description = "NO PERSON DETECTED"
 
-        gate_controller.set_state(relay_state)
-        ppe_status = yolo.latest_status.copy()
-
-    violations_detected = []
-    if ppe_status.get('no_helmet'): violations_detected.append('no-helmet')
-    if ppe_status.get('no_gloves'): violations_detected.append('no-gloves')
-    if ppe_status.get('no_boots'):  violations_detected.append('no-boots')
-
-    missing_items = (
-        [v.replace('no-', '') for v in violations_detected]
-        if violations_detected
-        else [x for x in ('helmet', 'gloves', 'boots') if not ppe_status.get(x)]
-    )
-
-    has_violation = ppe_status.get('has_violation', False)
-    ppe_state     = ppe_status.get('ppe_status', 'UNKNOWN')
-
-    if has_violation:
-        ppe_description = f"VIOLATION DETECTED: {', '.join(violations_detected)}"
-    elif ppe_state == "OK":
-        ppe_description = "COMPLETE PPE"
-    else:
-        ppe_description = "NO PERSON DETECTED"
-
-    violation = Violation(
-        timestamp      = violation_timestamp,
-        violation_type = 'manual_override',
-        missing_items  = ', '.join(missing_items) if missing_items else 'N/A',
-        image_path     = image_filename,
-        gate_action    = gate_action,
-        operator_id    = current_user.id,
-        notes          = f'{msg} by {current_user.username}. PPE Status: {ppe_description}',
-    )
-    db.session.add(violation)
-    db.session.commit()
+        violation = Violation(
+            timestamp      = violation_timestamp,
+            violation_type = 'manual_override',
+            missing_items  = ', '.join(missing_items) if missing_items else 'N/A',
+            image_path     = image_filename,
+            gate_action    = gate_action,
+            operator_id    = current_user.id,
+            notes          = f'{msg} by {current_user.username}. PPE Status: {ppe_description}',
+        )
+        db.session.add(violation)
+        db.session.commit()
 
     # 🔌 WebSocket: push manual override state
     socketio.emit('override_update', {
@@ -303,7 +290,7 @@ def control_relay():
         "message":        msg,
         "image_captured": image_filename is not None,
         "ppe_status":     ppe_status.get('ppe_status', 'UNKNOWN'),
-        "violations":     violations_detected if has_violation else [],
+        "violations":     violations_detected if gate_action == "MANUAL_OPEN" and ppe_status.get('has_violation', False) else [],
     })
 
 @app.route("/control/auto", methods=["POST"])

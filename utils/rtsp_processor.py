@@ -47,6 +47,7 @@ class RTSPStream:
         self.socketio       = socketio
 
         self.latest_frame: bytes | None = None
+        self._frame_lock = threading.Lock()  # protects latest_frame access
         self.latest_status = {
             "ppe_status": "UNKNOWN",
             "helmet": False, "gloves": False, "boots": False,
@@ -83,7 +84,8 @@ class RTSPStream:
 
     def get_snapshot(self) -> bytes | None:
         """Return the latest annotated JPEG bytes (None if not yet available)."""
-        return self.latest_frame
+        with self._frame_lock:
+            return self.latest_frame
 
     # ── internal loop ────────────────────────────────────────
     def _loop(self):
@@ -141,7 +143,8 @@ class RTSPStream:
                 #             0.8, (0, 255, 0), 2)
                 ret, jpeg = cv2.imencode(".jpg", frame)
                 if ret:
-                    self.latest_frame = jpeg.tobytes()
+                    with self._frame_lock:
+                        self.latest_frame = jpeg.tobytes()
 
             cap.release()
             if self._running:
@@ -178,7 +181,7 @@ class RTSPStream:
         no_gloves = ("no-gloves" in classes) or ("no-glove" in classes)
         no_boots  = "no-boots"  in classes
 
-        has_violation = no_helmet or no_gloves or no_boots
+        has_violation = no_helmet or no_boots  # no_gloves excluded (intentional, matches USB camera)
 
         if has_violation:
             new_status = "NOT_OK"
@@ -260,7 +263,9 @@ class RTSPStream:
         if (now - self._last_auto_capture) < self.AUTO_CAPTURE_COOLDOWN:
             return
 
-        if not isinstance(self.latest_frame, bytes) or len(self.latest_frame) == 0:
+        with self._frame_lock:
+            frame_data = self.latest_frame
+        if not isinstance(frame_data, bytes) or len(frame_data) == 0:
             return
 
         timestamp  = datetime.now()
@@ -270,7 +275,7 @@ class RTSPStream:
 
         try:
             os.makedirs(self.violations_dir, exist_ok=True)
-            nparr    = np.frombuffer(self.latest_frame, np.uint8)
+            nparr    = np.frombuffer(frame_data, np.uint8)
             frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if frame_np is not None:
                 path  = os.path.join(self.violations_dir, filename)
@@ -333,10 +338,12 @@ class RTSPStream:
         image_filename = f"rtsp_{self.camera_id}_{ts_str}.jpg"
         saved = False
 
-        if isinstance(self.latest_frame, bytes) and len(self.latest_frame) > 0:
+        with self._frame_lock:
+            frame_data = self.latest_frame
+        if isinstance(frame_data, bytes) and len(frame_data) > 0:
             try:
                 os.makedirs(self.violations_dir, exist_ok=True)
-                nparr    = np.frombuffer(self.latest_frame, np.uint8)
+                nparr    = np.frombuffer(frame_data, np.uint8)
                 frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 if frame_np is not None:
                     saved = cv2.imwrite(
