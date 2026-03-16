@@ -224,6 +224,18 @@ function loadInitialState() {
       events.slice().reverse().forEach(evt => prependEvent(evt));
     })
     .catch(err => console.error('Error loading initial events:', err));
+  
+  fetch('/api/stats')
+  .then(res => res.json())
+  .then(data => {
+    const v = document.getElementById('stat-violations');
+    const c = document.getElementById('stat-captures');
+    const e = document.getElementById('stat-entries');
+    if (v) v.textContent = data.violations_today;
+    if (c) c.textContent = data.captures_today;
+    if (e) e.textContent = data.entries_today;
+  })
+  .catch(err => console.error('Stats error:', err));
 }
 
 

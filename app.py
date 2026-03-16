@@ -203,6 +203,32 @@ def status():
 def events():
     return jsonify(yolo.events[-10:])
 
+@app.route('/api/stats')
+@login_required
+def api_stats():
+    today_start = datetime.combine(datetime.now().date(), datetime.min.time())
+
+    violations_today = Violation.query.filter(
+        Violation.timestamp >= today_start,
+        Violation.violation_type == 'auto_denied'
+    ).count()
+
+    captures_today = Violation.query.filter(
+        Violation.timestamp >= today_start,
+        Violation.violation_type.in_(['rtsp_auto_capture', 'rtsp_manual_capture'])
+    ).count()
+
+    entries_today = Violation.query.filter(
+        Violation.timestamp >= today_start,
+        Violation.gate_action == 'MANUAL_OPEN'
+    ).count()
+
+    return jsonify({
+        'violations_today': violations_today,
+        'captures_today':   captures_today,
+        'entries_today':    entries_today
+    })
+
 @app.route('/control/relay', methods=['POST'])
 @login_required
 def control_relay():

@@ -186,23 +186,24 @@ body.scada-body {
 }
 
 .badge.bg-success {
-  background: var(--success) !important;
-  color: #fff;
+  background: #0d7911 !important;
+  color: #000000;
 }
 
 .badge.bg-danger {
   background: var(--danger) !important;
-  color: #fff;
+  color: #000000;
 }
 
 .badge.bg-warning {
   background: var(--amber) !important;
-  color: var(--bg-base);
+  color: #000000 !important;
 }
 
 .badge.bg-info {
-  background: rgba(100,160,220,0.2) !important;
-  color: #7cb8e4;
+  background: #1a6fa8 !important;
+  color: #000000 !important;
+  border: 1px solid rgba(100,160,220,0.4);
 }
 
 .badge.bg-secondary {
@@ -683,8 +684,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .override-off {
-  background-color: rgba(255,255,255,0.08);
-  color: var(--text-secondary);
+  background-color: rgba(255,255,255,0.10);
+  color: #a0b4c8 !important;
+  border: 1px solid rgba(160,180,200,0.3);
 }
 
 
@@ -920,12 +922,10 @@ h1, h2, h3, h4, h5, h6 {
 
 /* ── 7. Theme Toggle ───────────────────────────────────────────── */
 
-/* ADDITION A — Default dark theme attribute */
 html[data-theme="dark"] {
   color-scheme: dark;
 }
 
-/* ADDITION B — Full light theme override block */
 html[data-theme="light"] {
   color-scheme: light;
   --bg-base:        #f0f2f4;
@@ -968,11 +968,6 @@ html[data-theme="light"] .card,
 html[data-theme="light"] .panel {
   background: var(--bg-panel) !important;
   border-color: var(--border) !important;
-}
-
-html[data-theme="light"] .card-header {
-  background: var(--bg-header) !important;
-  color: var(--text-primary) !important;
 }
 
 html[data-theme="light"] .stat-card {
@@ -1048,7 +1043,7 @@ html[data-theme="light"] .page-item.active .page-link {
   color: #fff !important;
 }
 
-/* ADDITION C — Fixed toggle button styles */
+/* -- Theme Toggle Button -------------------------------------- */
 #theme-toggle-btn {
   position: fixed;
   bottom: 24px;
@@ -1074,24 +1069,21 @@ html[data-theme="light"] .page-item.active .page-link {
   transform: scale(1.08);
 }
 
-/* ── Light mode readability improvements ── */
-
-/* Card headers */
+/* -- Light mode readability overrides ------------------------ */
 html[data-theme="light"] .card-header {
-  background-color: #b8d8f0 !important;  /* was #d6e8f7 */
-  color: #0f2d4a !important;             /* was #1a3a5c */
-  border-left-color: #2e7db5 !important; /* was #5a9fd4 */
-  border-bottom-color: #8bbcdc !important; /* was #b0cfe8 */
+  background-color: #b8d8f0 !important;
+  color: #0f2d4a !important;
+  border-left-color: #2e7db5 !important;
+  border-bottom-color: #8bbcdc !important;
 }
 
 html[data-theme="light"] .card-header i,
 html[data-theme="light"] .card-header span,
 html[data-theme="light"] .card-header small,
 html[data-theme="light"] .card-header strong {
-  color: #0f2d4a !important; /* was #1a3a5c */
+  color: #0f2d4a !important;
 }
 
-/* Stat card labels */
 html[data-theme="light"] .stat-card .stat-label {
   color: #2a2a2a !important;
   font-weight: 600 !important;
@@ -1102,49 +1094,50 @@ html[data-theme="light"] .stat-card .stat-value {
 }
 
 html[data-theme="light"] #relay-toggle-btn {
-  background-color: #d4870a !important;
-  color: #ffffff !important;
-  border-color: #a36508 !important;
+  background-color: transparent !important;
+  color: #a36508 !important;
+  border: 2px solid #a36508 !important;
 }
 
 html[data-theme="light"] #relay-toggle-btn:hover {
-  background-color: #a36508 !important;
+  background-color: #d4870a !important;
+  color: #ffffff !important;
 }
 
 html[data-theme="light"] #auto-mode-btn {
-  background-color: #5a6470 !important;
-  color: #ffffff !important;
-  border-color: #4a5460 !important;
+  background-color: transparent !important;
+  color: #3a4a58 !important;
+  border: 2px solid #3a4a58 !important;
 }
 
 html[data-theme="light"] #auto-mode-btn:hover {
-  background-color: #4a5460 !important;
-}
-/*
-html[data-theme="light"] .navbar,
-html[data-theme="light"] .sparc-navbar {
-  background: #1a5c8a !important;
-  border-bottom: 1px solid #14496e !important;
-}
-
-html[data-theme="light"] .sparc-brand,
-html[data-theme="light"] .nav-link,
-html[data-theme="light"] .navbar-text,
-html[data-theme="light"] .sparc-nav-link {
+  background-color: #5a6470 !important;
   color: #ffffff !important;
 }
 
-html[data-theme="light"] .sparc-nav-link:hover {
-  color: #ffd580 !important;
-  background: rgba(255,255,255,0.12) !important;
+html[data-theme="light"] .badge.bg-success {
+  background: var(--success) !important;
+  color: #ffffff;
 }
 
-html[data-theme="light"] .navbar-nav .btn-outline-light {
-  border-color: rgba(255,255,255,0.5) !important;
+html[data-theme="light"] .badge.bg-danger {
+  background: var(--danger) !important;
+  color: #ffffff;
+}
+
+html[data-theme="light"] .badge.bg-warning {
+  background: var(--amber) !important;
   color: #ffffff !important;
 }
 
-html[data-theme="light"] .navbar-nav .btn-outline-light:hover {
-  background: rgba(255,255,255,0.15) !important;
+html[data-theme="light"] .badge.bg-info {
+  background: #1a6fa8 !important;
+  color: #ffffff !important;
+  border: none;
 }
-  */
+
+html[data-theme="light"] .override-off {
+  background-color: #d0dce8 !important;
+  color: #1a3a5c !important;
+  border: 1px solid #8aaac8;
+}
