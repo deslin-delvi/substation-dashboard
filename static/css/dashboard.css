@@ -916,3 +916,205 @@ h1, h2, h3, h4, h5, h6 {
 .pulse {
   animation: pulse 2s infinite;
 }
+
+
+/* ── 7. Theme Toggle ───────────────────────────────────────────── */
+
+/* ADDITION A — Default dark theme attribute */
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* ADDITION B — Full light theme override block */
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg-base:        #f0f2f4;
+  --bg-panel:       #ffffff;
+  --bg-panel-alt:   #f8f9fa;
+  --bg-header:      #e8eaed;
+  --amber:          #d4870a;
+  --amber-dim:      #a36508;
+  --amber-bg:       rgba(212,135,10,0.10);
+  --danger:         #c0392b;
+  --danger-bg:      rgba(192,57,43,0.10);
+  --success:        #27862a;
+  --success-bg:     rgba(39,134,42,0.10);
+  --border:         rgba(0,0,0,0.10);
+  --border-accent:  rgba(212,135,10,0.40);
+  --text-primary:   #1a1c1e;
+  --text-secondary: #5a5855;
+  --text-mono:      #4a4845;
+}
+
+html[data-theme="light"] body {
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .navbar,
+html[data-theme="light"] .sparc-navbar {
+  background: var(--bg-header) !important;
+  border-bottom: 1px solid var(--border);
+}
+
+html[data-theme="light"] .sparc-brand,
+html[data-theme="light"] .nav-link,
+html[data-theme="light"] .navbar-text,
+html[data-theme="light"] .sparc-nav-link {
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .card,
+html[data-theme="light"] .panel {
+  background: var(--bg-panel) !important;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="light"] .card-header {
+  background: var(--bg-header) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .stat-card {
+  background: var(--bg-panel) !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .ppe-item {
+  background: var(--bg-panel-alt) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .event-item {
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .event-log {
+  background: var(--bg-panel) !important;
+}
+
+html[data-theme="light"] .relay-status,
+html[data-theme="light"] .status-pill {
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .status-subtext,
+html[data-theme="light"] #override-message,
+html[data-theme="light"] #last-updated,
+html[data-theme="light"] .text-muted {
+  color: var(--text-secondary) !important;
+}
+
+html[data-theme="light"] .form-control,
+html[data-theme="light"] .form-select,
+html[data-theme="light"] textarea {
+  background: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="light"] .modal-content {
+  background: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .modal-header,
+html[data-theme="light"] .modal-footer {
+  background: var(--bg-header) !important;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="light"] .alert-light {
+  background: var(--bg-panel-alt) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] .camera-feed,
+html[data-theme="light"] .bg-dark,
+html[data-theme="light"] .bg-black {
+  background: #1a1c1e !important;
+}
+
+html[data-theme="light"] .page-link {
+  background: var(--bg-panel) !important;
+  border-color: var(--border) !important;
+  color: var(--amber) !important;
+}
+
+html[data-theme="light"] .page-item.active .page-link {
+  background: var(--amber) !important;
+  color: #fff !important;
+}
+
+/* ADDITION C — Fixed toggle button styles */
+#theme-toggle-btn {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-accent);
+  background: var(--bg-panel);
+  color: var(--amber);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+#theme-toggle-btn:hover {
+  border-color: var(--amber);
+  transform: scale(1.08);
+}
+
+/* ── Light mode readability improvements ── */
+
+html[data-theme="light"] .card-header {
+  background-color: #d6e8f7 !important;
+  color: #1a3a5c !important;
+  border-left-color: #5a9fd4 !important;
+  border-bottom-color: #b0cfe8 !important;
+}
+
+html[data-theme="light"] .card-header i,
+html[data-theme="light"] .card-header span,
+html[data-theme="light"] .card-header small,
+html[data-theme="light"] .card-header strong {
+  color: #1a3a5c !important;
+}
+
+html[data-theme="light"] .stat-card .stat-label {
+  color: #2a2a2a !important;
+  font-weight: 600 !important;
+}
+
+html[data-theme="light"] .stat-card .stat-value {
+  color: #111111 !important;
+}
+
+html[data-theme="light"] #relay-toggle-btn {
+  background-color: #d4870a !important;
+  color: #ffffff !important;
+  border-color: #a36508 !important;
+}
+
+html[data-theme="light"] #relay-toggle-btn:hover {
+  background-color: #a36508 !important;
+}
+
+html[data-theme="light"] #auto-mode-btn {
+  background-color: #5a6470 !important;
+  color: #ffffff !important;
+  border-color: #4a5460 !important;
+}
+
+html[data-theme="light"] #auto-mode-btn:hover {
+  background-color: #4a5460 !important;
+}
