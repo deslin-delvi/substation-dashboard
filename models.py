@@ -60,3 +60,16 @@ class RTSPCamera(db.Model):
             'enabled':  self.enabled,
             'added_at': self.added_at.strftime('%Y-%m-%d %H:%M'),
         }
+    
+class YardAlert(db.Model):
+    """Logs auto-detected in-yard PPE violations and supervisor acknowledgements."""
+    __tablename__ = 'yard_alert'
+
+    id               = db.Column(db.Integer, primary_key=True)
+    camera_id        = db.Column(db.Integer, nullable=False)
+    camera_name      = db.Column(db.String(100), nullable=False)
+    missing_items    = db.Column(db.String(200))
+    image_path       = db.Column(db.String(300))
+    timestamp        = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    acknowledged_at  = db.Column(db.DateTime, nullable=True)
+    acknowledged_by  = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)

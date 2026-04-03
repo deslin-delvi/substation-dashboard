@@ -15,8 +15,8 @@ os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
 
 # Local imports
 from utils.yolo_detector import YOLOProcessor
-from utils.rtsp_processor import RTSPManager          # 📡 NEW
-from models import db, User, Violation, RTSPCamera    # 📡 NEW: RTSPCamera model
+from utils.rtsp_processor import RTSPManager
+from models import db, User, Violation, RTSPCamera, YardAlert
 from hardware_controller import GateController
 
 app = Flask(__name__)
@@ -596,6 +596,22 @@ def capture_cctv_violation(camera_id):
         'status':   'success',
         'message':  'Violation captured and logged',
         'image':    filename,
+    })
+
+@app.route('/yard-alerts/<int:alert_id>/acknowledge', methods=['POST'])
+@login_required
+def acknowledge_yard_alert(alert_id):
+    """Supervisor acknowledges a yard PPE violation alert."""
+    alert = YardAlert.query.get_or_404(alert_id)
+    if alert.acknowledged_at is None:   # only set once
+        alert.acknowledged_at = datetime.now()
+        alert.acknowledged_by = current_user.id
+        db.session.commit()
+    return jsonify({
+        'status':          'success',
+        'alert_id':        alert_id,
+        'acknowledged_by': current_user.username,
+        'acknowledged_at': alert.acknowledged_at.strftime('%H:%M:%S'),
     })
 
 # ─────────────────────────────────────────────────────────────

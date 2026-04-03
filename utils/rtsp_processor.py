@@ -17,7 +17,7 @@ from datetime import datetime
 from ultralytics import YOLO
 
 try:
-    from models import db, Violation, RTSPCamera
+    from models import db, Violation, RTSPCamera, YardAlert
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
@@ -311,6 +311,7 @@ class RTSPStream:
 
         try:
             with self.flask_app.app_context():
+                # Existing violation record (unchanged)
                 record = Violation(
                     timestamp      = timestamp,
                     violation_type = "rtsp_auto_capture",
@@ -324,10 +325,21 @@ class RTSPStream:
                     ),
                 )
                 db.session.add(record)
+
+                # New yard alert record for acknowledgement tracking
+                alert = YardAlert(
+                    camera_id    = self.camera_id,
+                    camera_name  = self.name,
+                    missing_items = ", ".join(missing_items) if missing_items else "N/A",
+                    image_path   = filename,
+                    timestamp    = timestamp,
+                )
+                db.session.add(alert)
                 db.session.commit()
                 print(f"📸 Auto-capture logged [{self.name}]: {filename}")
 
                 if self.socketio:
+                    # Existing silent violation event (unchanged)
                     self.socketio.emit('rtsp_violation', {
                         "camera_id":   self.camera_id,
                         "camera_name": self.name,
@@ -336,6 +348,15 @@ class RTSPStream:
                         "image":       filename,
                         "time":        timestamp.strftime('%H:%M:%S'),
                         "auto":        True,
+                    })
+                    # New loud yard alert event — triggers banner + beep on all pages
+                    self.socketio.emit('yard_alert', {
+                        "alert_id":    alert.id,
+                        "camera_id":   self.camera_id,
+                        "camera_name": self.name,
+                        "missing":     missing_items,
+                        "image":       filename,
+                        "time":        timestamp.strftime('%H:%M:%S'),
                     })
         except Exception as e:
             print(f"❌ Auto-capture DB error [{self.name}]: {e}")

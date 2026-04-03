@@ -363,6 +363,133 @@ socket.on('override_update', (data) => {
 
 
 // ─────────────────────────────────────────────────────────────
+// Yard PPE Alert — banner + siren beep + acknowledge
+// ─────────────────────────────────────────────────────────────
+let _currentAlertId = null;
+
+function playAlertBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Deep urgent alarm — two low-frequency tones alternating (industrial buzzer style).
+    // Low frequencies (100–140 Hz) carry far better on laptop speakers than high beeps.
+    const tones = [130, 110];   // Hz — deep bass (C3 / A2 range)
+
+    tones.forEach((freq, i) => {
+      const osc    = ctx.createOscillator();
+      const gain   = ctx.createGain();
+      const shaper = ctx.createWaveShaper();
+
+      // Mild waveshaper adds odd harmonics — makes low tones feel fuller/punchier
+      const curve = new Float32Array(256);
+      for (let j = 0; j < 256; j++) {
+        const x = (j * 2) / 256 - 1;
+        curve[j] = (Math.PI + 200) * x / (Math.PI + 200 * Math.abs(x));
+      }
+      shaper.curve = curve;
+
+      osc.connect(shaper);
+      shaper.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type            = 'square';  // square wave — rich harmonics at low freq
+      osc.frequency.value = freq;
+
+      const start    = ctx.currentTime + i * 0.55;  // 550ms gap between the two tones
+      const duration = 0.45;                         // each tone holds for 450ms
+
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(0.8, start + 0.03);    // fast attack
+      gain.gain.setValueAtTime(0.8, start + duration - 0.06);  // sustain
+      gain.gain.linearRampToValueAtTime(0, start + duration);  // smooth decay
+
+      osc.start(start);
+      osc.stop(start + duration);
+    });
+
+  } catch (e) {
+    console.warn('Audio not available:', e);
+  }
+}
+
+function showYardAlertBanner(data) {
+  _currentAlertId = data.alert_id;
+
+  document.getElementById('yard-alert-camera').textContent = data.camera_name || '';
+  document.getElementById('yard-alert-time').textContent   = data.time || '';
+
+  // Render missing items as pill badges
+  const missingEl = document.getElementById('yard-alert-missing');
+  const items = Array.isArray(data.missing) ? data.missing : [data.missing];
+  missingEl.innerHTML = items
+    .filter(Boolean)
+    .map(item => `<span class="yard-missing-badge">${item}</span>`)
+    .join('');
+
+  // Thumbnail
+  const thumb = document.getElementById('yard-alert-thumb');
+  if (data.image) {
+    thumb.src           = `/violation-image/${data.image}`;
+    thumb.style.display = 'inline-block';
+  } else {
+    thumb.style.display = 'none';
+  }
+
+  // Reset acknowledge button
+  const ackBtn = document.getElementById('yard-alert-ack-btn');
+  if (ackBtn) {
+    ackBtn.disabled   = false;
+    ackBtn.innerHTML  = '<i class="bi bi-check-circle-fill me-1"></i> Acknowledge';
+  }
+
+  // Show banner and push content down
+  const banner  = document.getElementById('yard-alert-banner');
+  const content = document.getElementById('main-content');
+  banner.style.display = 'block';
+  if (content) content.style.paddingTop = (banner.offsetHeight + 16) + 'px';
+}
+
+function hideYardAlertBanner() {
+  const banner  = document.getElementById('yard-alert-banner');
+  const content = document.getElementById('main-content');
+  if (banner)  banner.style.display = 'none';
+  if (content) content.style.paddingTop = '';
+  _currentAlertId = null;
+}
+
+socket.on('yard_alert', (data) => {
+  console.log('🚨 yard_alert received:', data);
+  playAlertBeep();
+  showYardAlertBanner(data);
+});
+
+// Wire acknowledge button on every page
+document.addEventListener('DOMContentLoaded', () => {
+  const ackBtn = document.getElementById('yard-alert-ack-btn');
+  if (!ackBtn) return;
+  ackBtn.addEventListener('click', () => {
+    if (_currentAlertId === null) return;
+    ackBtn.disabled  = true;
+    ackBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i> Saving…';
+    fetch(`/yard-alerts/${_currentAlertId}/acknowledge`, { method: 'POST' })
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          hideYardAlertBanner();
+        } else {
+          ackBtn.disabled  = false;
+          ackBtn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Acknowledge';
+        }
+      })
+      .catch(() => {
+        ackBtn.disabled  = false;
+        ackBtn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i> Acknowledge';
+      });
+  });
+});
+
+
+// ─────────────────────────────────────────────────────────────
 // Boot
 // ─────────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
