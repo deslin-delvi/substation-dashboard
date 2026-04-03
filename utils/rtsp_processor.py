@@ -47,7 +47,6 @@ class RTSPStream:
         self.socketio       = socketio
 
         self.latest_frame: bytes | None = None
-        self._frame_lock = threading.Lock()  # protects latest_frame access
         self.latest_status = {
             "ppe_status": "UNKNOWN",
             "helmet": False, "gloves": False, "boots": False,
@@ -84,8 +83,7 @@ class RTSPStream:
 
     def get_snapshot(self) -> bytes | None:
         """Return the latest annotated JPEG bytes (None if not yet available)."""
-        with self._frame_lock:
-            return self.latest_frame
+        return self.latest_frame
 
     # ── internal loop ────────────────────────────────────────
     def _loop(self):
@@ -143,8 +141,7 @@ class RTSPStream:
                 #             0.8, (0, 255, 0), 2)
                 ret, jpeg = cv2.imencode(".jpg", frame)
                 if ret:
-                    with self._frame_lock:
-                        self.latest_frame = jpeg.tobytes()
+                    self.latest_frame = jpeg.tobytes()
 
             cap.release()
             if self._running:
@@ -155,15 +152,40 @@ class RTSPStream:
     def _open_capture(self):
         """Try to open the RTSP stream; return cap object or None."""
         try:
+            # Must be set BEFORE VideoCapture() — FFmpeg reads this at open time
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
+                "rtsp_transport;tcp"
+                "|timeout;60000000"
+                "|flags;+discardcorrupt"   # silently drop undecodable frames
+            )
+
             cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 2)
-            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|timeout;60000000"
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 3)
             cap.set(cv2.CAP_PROP_FRAME_WIDTH,  640)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
             if not cap.isOpened():
                 print(f"❌ Cannot open RTSP URL: {self.url}")
                 return None
+
+            # Drain frames until we land on a keyframe (I-frame).
+            # P/B-frames decoded before the first I-frame produce the
+            # corrupted grain blocks seen on stream connect.
+            print(f"⏳ Waiting for keyframe: {self.name}…")
+            for _ in range(60):   # max ~2s at 30fps before giving up
+                ok, frame = cap.read()
+                if not ok:
+                    break
+                # OpenCV exposes keyframe flag via this backend property
+                if cap.get(cv2.CAP_PROP_BUFFERSIZE) >= 0:
+                    # Check for a clean frame — non-zero pixel variance
+                    # means we're past the corrupt grey/green initial frames
+                    if frame is not None and frame.size > 0:
+                        sample = frame[::8, ::8]   # cheap 1/64 subsample
+                        if sample.std() > 8.0:     # real content, not grey noise
+                            print(f"✅ Clean keyframe acquired: {self.name}")
+                            break
+
             return cap
         except Exception as e:
             print(f"❌ Error opening {self.url}: {e}")
@@ -181,7 +203,7 @@ class RTSPStream:
         no_gloves = ("no-gloves" in classes) or ("no-glove" in classes)
         no_boots  = "no-boots"  in classes
 
-        has_violation = no_helmet or no_boots  # no_gloves excluded (intentional, matches USB camera)
+        has_violation = no_helmet or no_gloves or no_boots
 
         if has_violation:
             new_status = "NOT_OK"
@@ -263,9 +285,7 @@ class RTSPStream:
         if (now - self._last_auto_capture) < self.AUTO_CAPTURE_COOLDOWN:
             return
 
-        with self._frame_lock:
-            frame_data = self.latest_frame
-        if not isinstance(frame_data, bytes) or len(frame_data) == 0:
+        if not isinstance(self.latest_frame, bytes) or len(self.latest_frame) == 0:
             return
 
         timestamp  = datetime.now()
@@ -275,7 +295,7 @@ class RTSPStream:
 
         try:
             os.makedirs(self.violations_dir, exist_ok=True)
-            nparr    = np.frombuffer(frame_data, np.uint8)
+            nparr    = np.frombuffer(self.latest_frame, np.uint8)
             frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if frame_np is not None:
                 path  = os.path.join(self.violations_dir, filename)
@@ -338,12 +358,10 @@ class RTSPStream:
         image_filename = f"rtsp_{self.camera_id}_{ts_str}.jpg"
         saved = False
 
-        with self._frame_lock:
-            frame_data = self.latest_frame
-        if isinstance(frame_data, bytes) and len(frame_data) > 0:
+        if isinstance(self.latest_frame, bytes) and len(self.latest_frame) > 0:
             try:
                 os.makedirs(self.violations_dir, exist_ok=True)
-                nparr    = np.frombuffer(frame_data, np.uint8)
+                nparr    = np.frombuffer(self.latest_frame, np.uint8)
                 frame_np = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 if frame_np is not None:
                     saved = cv2.imwrite(
